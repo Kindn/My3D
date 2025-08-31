@@ -27,15 +27,15 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 //
-// Author: Johannes L. Schoenberger (jsch-at-demuc-dot-de) 
+// Author: Johannes L. Schoenberger (jsch-at-demuc-dot-de)
 // Modified by P. Y. Liu (22S053073@stu.hit.edu.cn)
 
 {
-  const double* b = B.data();
+  const double *b = B.data();
 
   coeffs(10) = b[0] * b[17] * b[34] + b[26] * b[4] * b[21] -
-              b[26] * b[17] * b[8] - b[13] * b[4] * b[34] -
-              b[0] * b[21] * b[30] + b[13] * b[30] * b[8];
+               b[26] * b[17] * b[8] - b[13] * b[4] * b[34] -
+               b[0] * b[21] * b[30] + b[13] * b[30] * b[8];
   coeffs(9) =
       b[26] * b[4] * b[22] + b[14] * b[30] * b[8] + b[13] * b[31] * b[8] +
       b[1] * b[17] * b[34] - b[13] * b[5] * b[34] + b[26] * b[5] * b[21] -
@@ -202,6 +202,6 @@
       b[16] * b[32] * b[12] + b[29] * b[6] * b[25] - b[16] * b[7] * b[37] -
       b[3] * b[25] * b[32] - b[15] * b[7] * b[38] + b[16] * b[33] * b[11];
   coeffs(0) = -b[29] * b[20] * b[12] + b[29] * b[7] * b[25] +
-               b[16] * b[33] * b[12] - b[16] * b[7] * b[38] +
-               b[3] * b[20] * b[38] - b[3] * b[25] * b[33];
+              b[16] * b[33] * b[12] - b[16] * b[7] * b[38] +
+              b[3] * b[20] * b[38] - b[3] * b[25] * b[33];
 }

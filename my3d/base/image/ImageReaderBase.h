@@ -2,57 +2,51 @@
  * filename: ImageReaderBase.h
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
- * brief:    
+ * brief:
  */
 
 #ifndef _MY3D_BASE_IMAGE_IMAGE_READER_BASE_H_
 #define _MY3D_BASE_IMAGE_IMAGE_READER_BASE_H_
 
 #include <iostream>
-#include <vector>
-#include <string>
 #include <memory>
+#include <string>
+#include <vector>
 
-#include "utils/eigen_types.h"
 #include "base/image/Image.h"
+#include "utils/eigen_types.h"
 
 namespace my3d {
 namespace base {
 
 class ImageReaderBase {
-public: 
-    enum ImReadMode {
-        IMREAD_GRAYSCALE = 0, 
-        IMREAD_COLOR = 1
-    };
+public:
+  enum ImReadMode { IMREAD_GRAYSCALE = 0, IMREAD_COLOR = 1 };
 
-public: 
-    ImageReaderBase() {}
-    virtual ~ImageReaderBase() {}
+public:
+  ImageReaderBase() {}
+  virtual ~ImageReaderBase() {}
 
-public: 
-    virtual bool read(const std::string &path, 
-                      Image &out, 
-                      ImReadMode mode = ImReadMode::IMREAD_COLOR) const = 0;
-    
-    virtual bool save(const std::string &path, 
-                      const Image &src) const = 0;
+public:
+  virtual bool read(const std::string &path, Image &out,
+                    ImReadMode mode = ImReadMode::IMREAD_COLOR) const = 0;
 
-    void setFocalLengthPrior(const double &fx_prior, 
-                             const double &fy_prior) {
-        // assert(fx_prior > std::numeric_limits<double>::epsilon()); 
-        // assert(fy_prior > std::numeric_limits<double>::epsilon());
+  virtual bool save(const std::string &path, const Image &src) const = 0;
 
-        fx_prior_ = fx_prior; 
-        fy_prior_ = fy_prior; 
-    }
+  void setFocalLengthPrior(const double &fx_prior, const double &fy_prior) {
+    // assert(fx_prior > std::numeric_limits<double>::epsilon());
+    // assert(fy_prior > std::numeric_limits<double>::epsilon());
 
-protected: 
-    double fx_prior_{500.0};
-    double fy_prior_{500.0}; 
+    fx_prior_ = fx_prior;
+    fy_prior_ = fy_prior;
+  }
+
+protected:
+  double fx_prior_{500.0};
+  double fy_prior_{500.0};
 };
 
-}
-}
+} // namespace base
+} // namespace my3d
 
 #endif // _MY3D_BASE_IMAGE_IMAGE_READER_BASE_H_

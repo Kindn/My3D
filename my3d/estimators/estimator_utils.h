@@ -16,17 +16,17 @@ namespace estimator {
 /**
  * @brief Compute squraed Sampson error for a fundamatal/essential matrix.
  * The model is point2.tranpose() * E * point1 == 0
-*/
-double computeSquaredSampsonError(const Eigen::Vector2d &point1, 
-                                  const Eigen::Vector2d &point2, 
+ */
+double computeSquaredSampsonError(const Eigen::Vector2d &point1,
+                                  const Eigen::Vector2d &point2,
                                   const Eigen::Matrix3d &E);
 
-void computeSquaredSampsonError(const EigenVec<Eigen::Vector2d> &points1, 
-                                 const EigenVec<Eigen::Vector2d> &points2, 
-                                 const Eigen::Matrix3d &E, 
-                                 std::vector<double> &errors);
+void computeSquaredSampsonError(const EigenVec<Eigen::Vector2d> &points1,
+                                const EigenVec<Eigen::Vector2d> &points2,
+                                const Eigen::Matrix3d &E,
+                                std::vector<double> &errors);
 
-}
-}
+} // namespace estimator
+} // namespace my3d
 
 #endif // _MY3D_ESTIMATOR_ESTIMATOR_UTILS_H_

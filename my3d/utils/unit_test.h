@@ -11,9 +11,8 @@
 #include <iostream>
 
 namespace my3d {
-namespace util {
-}
-}
+namespace util {}
+} // namespace my3d
 
 #define BOOST_TEST_MAIN
 

@@ -31,8 +31,8 @@
 // Modified by P. Y. Liu (22S053073@stu.hit.edu.cn)
 
 {
-  double* a = A.data();
-  const double* e = E.data();
+  double *a = A.data();
+  const double *e = E.data();
 
   double e2[36];
   double e3[36];

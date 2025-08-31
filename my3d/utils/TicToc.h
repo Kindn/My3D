@@ -1,39 +1,31 @@
 #ifndef _GOPT_TIC_TOC_H_
 #define _GOPT_TIC_TOC_H_
 
-#include <ctime>
-#include <cstdlib>
 #include <chrono>
+#include <cstdlib>
+#include <ctime>
 
-namespace my3d { 
+namespace my3d {
 namespace util {
 
-class TicToc
-{
-  public:
-    TicToc()
-    {
-        tic();
-    }
+class TicToc {
+public:
+  TicToc() { tic(); }
 
-    void tic()
-    {
-        start = std::chrono::steady_clock::now();
-    }
+  void tic() { start = std::chrono::steady_clock::now(); }
 
-    double toc()
-    {
-        end = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed_seconds = 
-          std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        return elapsed_seconds.count();
-    }
+  double toc() {
+    end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed_seconds =
+        std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    return elapsed_seconds.count();
+  }
 
-  private:
-    std::chrono::steady_clock::time_point start, end;
+private:
+  std::chrono::steady_clock::time_point start, end;
 };
 
-}
-}
+} // namespace util
+} // namespace my3d
 
 #endif // _TIC_TOC_H_

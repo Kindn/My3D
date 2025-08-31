@@ -2,7 +2,7 @@
  * filename: Image.h
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
- * brief:    
+ * brief:
  */
 
 #ifndef _MY3D_BASE_IMAGE_IMAGE_H_
@@ -10,8 +10,8 @@
 
 #include <memory>
 
-#include "utils/eigen_types.h"
 #include "base/camera/CameraBase.h"
+#include "utils/eigen_types.h"
 
 #include "TinyEXIF/TinyEXIF.h"
 
@@ -20,119 +20,124 @@ namespace base {
 
 /**
  * @brief Class of byte image.
-*/
+ */
 class Image {
 public:
-    Image(); 
-    Image(const size_t &rows, const size_t &cols, const size_t &channels = 1); 
-    Image(const size_t &rows, const size_t &cols, const size_t &channels, uint8_t *data, 
-          const size_t &id = 0, const std::string &name = "", 
-          CameraBase *camera = nullptr);
-    ~Image();
+  Image();
+  Image(const size_t &rows, const size_t &cols, const size_t &channels = 1);
+  Image(const size_t &rows, const size_t &cols, const size_t &channels,
+        uint8_t *data, const size_t &id = 0, const std::string &name = "",
+        CameraBase *camera = nullptr);
+  ~Image();
 
-    /**
-     * @brief Construct a deep copy of other
-    */
-    Image(const Image &other);
+  /**
+   * @brief Construct a deep copy of other
+   */
+  Image(const Image &other);
 
-    /**
-     * @brief Return a deep copy of other
-    */
-    Image &operator = (const Image &other);
+  /**
+   * @brief Return a deep copy of other
+   */
+  Image &operator=(const Image &other);
 
-    void set(const size_t &rows, const size_t &cols, const size_t &channels, uint8_t *data, 
-             const size_t &idx = 0, const std::string &name = "", 
-             CameraBase *camera = nullptr);
-    
-    void setId(const size_t &id) { id_ = id; }
+  void set(const size_t &rows, const size_t &cols, const size_t &channels,
+           uint8_t *data, const size_t &idx = 0, const std::string &name = "",
+           CameraBase *camera = nullptr);
 
-    size_t &getId() { return id_; }
+  void setId(const size_t &id) { id_ = id; }
 
-    const size_t &getId() const { return id_; }
+  size_t &getId() { return id_; }
 
-    void setName(const std::string &name) { name_ = name; }
+  const size_t &getId() const { return id_; }
 
-    std::string &getName() { return name_; }
+  void setName(const std::string &name) { name_ = name; }
 
-    const std::string &getName() const { return name_; }
+  std::string &getName() { return name_; }
 
-    void setCameraModel(CameraBase *camera) { camera_.reset(camera); }
+  const std::string &getName() const { return name_; }
 
-    std::shared_ptr<CameraBase> getCameraModel() const { return camera_; }
+  void setCameraModel(CameraBase *camera) { camera_.reset(camera); }
 
-    size_t rows() const { return rows_; }
+  std::shared_ptr<CameraBase> getCameraModel() const { return camera_; }
 
-    size_t cols() const { return cols_; }
+  size_t rows() const { return rows_; }
 
-    size_t channels() const { return channels_; }
+  size_t cols() const { return cols_; }
 
-    size_t size() const { return rows_ * cols_; }
+  size_t channels() const { return channels_; }
 
-    const uint8_t& at(const size_t &row, const size_t &col, const size_t &channel) const;
-    
-    uint8_t& at(const size_t &row, const size_t &col, const size_t &channel);
+  size_t size() const { return rows_ * cols_; }
 
-    uint8_t *ptr(const size_t &row);
+  const uint8_t &at(const size_t &row, const size_t &col,
+                    const size_t &channel) const;
 
-    const uint8_t *ptr(const size_t &row) const;
+  uint8_t &at(const size_t &row, const size_t &col, const size_t &channel);
 
-    uint8_t *ptr(const size_t &row, const size_t &col);
+  uint8_t *ptr(const size_t &row);
 
-    const uint8_t *ptr(const size_t &row, const size_t &col) const;
+  const uint8_t *ptr(const size_t &row) const;
 
-    uint8_t *ptr(const size_t &row, const size_t &col, const size_t &channel);
+  uint8_t *ptr(const size_t &row, const size_t &col);
 
-    const uint8_t *ptr(const size_t &row, const size_t &col, const size_t &channel) const;
+  const uint8_t *ptr(const size_t &row, const size_t &col) const;
 
-    Eigen::Matrix<uint8_t, Eigen::Dynamic, 1> getChannel(const size_t &row, const size_t &col) const; 
+  uint8_t *ptr(const size_t &row, const size_t &col, const size_t &channel);
 
-    Eigen::Vector2d getGrandient(const size_t &x, const size_t &y, const size_t &channel = 0) const; 
+  const uint8_t *ptr(const size_t &row, const size_t &col,
+                     const size_t &channel) const;
 
-    bool isEmpty() const;
+  Eigen::Matrix<uint8_t, Eigen::Dynamic, 1> getChannel(const size_t &row,
+                                                       const size_t &col) const;
 
-    uint8_t *data() { return data_; }
+  Eigen::Vector2d getGrandient(const size_t &x, const size_t &y,
+                               const size_t &channel = 0) const;
 
-    const uint8_t *data() const { return data_; }
+  bool isEmpty() const;
 
-    TinyEXIF::EXIFInfo &getEXIFInfo() { return exif_info_; }
+  uint8_t *data() { return data_; }
 
-    const TinyEXIF::EXIFInfo &getEXIFInfo() const { return exif_info_; }
+  const uint8_t *data() const { return data_; }
 
-    void clear(); 
+  TinyEXIF::EXIFInfo &getEXIFInfo() { return exif_info_; }
 
-    template <typename DType>
-    EigenVec<Eigen::Matrix<DType, Eigen::Dynamic, Eigen::Dynamic>> 
-    toEigenMatrices() const {
-        EigenVec<Eigen::Matrix<DType, Eigen::Dynamic, Eigen::Dynamic>> 
-            out(channels_, Eigen::Matrix<DType, Eigen::Dynamic, Eigen::Dynamic>::Zero(rows_, cols_)); 
-        for (size_t ch = 0; ch < channels_; ++ch) {
-            for (size_t r = 0; r < rows_; ++r) {
-                for (size_t c = 0; c < cols_; ++c) {
-                    out[ch].operator()(r, c) = static_cast<DType>(at(r, c, ch)); 
-                }
-            }
+  const TinyEXIF::EXIFInfo &getEXIFInfo() const { return exif_info_; }
+
+  void clear();
+
+  template <typename DType>
+  EigenVec<Eigen::Matrix<DType, Eigen::Dynamic, Eigen::Dynamic>>
+  toEigenMatrices() const {
+    EigenVec<Eigen::Matrix<DType, Eigen::Dynamic, Eigen::Dynamic>> out(
+        channels_, Eigen::Matrix<DType, Eigen::Dynamic, Eigen::Dynamic>::Zero(
+                       rows_, cols_));
+    for (size_t ch = 0; ch < channels_; ++ch) {
+      for (size_t r = 0; r < rows_; ++r) {
+        for (size_t c = 0; c < cols_; ++c) {
+          out[ch].operator()(r, c) = static_cast<DType>(at(r, c, ch));
         }
-        return out; 
+      }
     }
+    return out;
+  }
 
-private: 
-    uint8_t *data_{nullptr};
-    size_t step0_{0};
-    size_t step1_{0};
+private:
+  uint8_t *data_{nullptr};
+  size_t step0_{0};
+  size_t step1_{0};
 
-    size_t rows_{0};
-    size_t cols_{0};
-    size_t channels_{0};
+  size_t rows_{0};
+  size_t cols_{0};
+  size_t channels_{0};
 
-    size_t id_{0};
-    std::string name_{""};
+  size_t id_{0};
+  std::string name_{""};
 
-    TinyEXIF::EXIFInfo exif_info_;
+  TinyEXIF::EXIFInfo exif_info_;
 
-    std::shared_ptr<CameraBase> camera_;
+  std::shared_ptr<CameraBase> camera_;
 };
 
-}
-}
+} // namespace base
+} // namespace my3d
 
 #endif // _MY3D_BASE_IMAGE_IMAGE_H_

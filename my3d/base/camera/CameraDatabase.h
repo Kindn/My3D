@@ -10,28 +10,27 @@
 #ifndef _MY3D_BASE_CAMERA_CAMERA_DATABASE_H_
 #define _MY3D_BASE_CAMERA_CAMERA_DATABASE_H_
 
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace my3d {
 namespace base {
 /**
  * Representation of a digital camera.
  */
-struct CameraInfo
-{
-    /** The manufacturer for the camera. */
-    std::string maker;
-    /** The model of the camera. */
-    std::string model;
-    /** The width of the sensor in milli meters. */
-    float sensor_width_mm;
-    /** The height of the sensor in milli meters. */
-    float sensor_height_mm;
-    /** The width of the sensor in pixels. */
-    int sensor_width_px;
-    /** The height of the sensor in pixels. */
-    int sensor_height_px;
+struct CameraInfo {
+  /** The manufacturer for the camera. */
+  std::string maker;
+  /** The model of the camera. */
+  std::string model;
+  /** The width of the sensor in milli meters. */
+  float sensor_width_mm;
+  /** The height of the sensor in milli meters. */
+  float sensor_height_mm;
+  /** The width of the sensor in pixels. */
+  int sensor_width_px;
+  /** The height of the sensor in pixels. */
+  int sensor_height_px;
 };
 
 /* ---------------------------------------------------------------- */
@@ -41,38 +40,34 @@ struct CameraInfo
  * a camera model in the database and return the model on successful lookup.
  * If the lookup fails, a null pointer is returned.
  */
-class CameraDatabase
-{
+class CameraDatabase {
 public:
-    /** Access to the singleton object. */
-    static CameraDatabase* get (void);
+  /** Access to the singleton object. */
+  static CameraDatabase *get(void);
 
-    /** Lookup of a camera model. Returns null on failure. */
-    CameraInfo const* lookup (std::string const& maker,
-        std::string const& model) const;
-
-private:
-    CameraDatabase (void);
-    void add (std::string const& maker, std::string const& model,
-        float sensor_width_mm, float sensor_height_mm,
-        int sensor_width_px, int sensor_height_px);
+  /** Lookup of a camera model. Returns null on failure. */
+  CameraInfo const *lookup(std::string const &maker,
+                           std::string const &model) const;
 
 private:
-    static CameraDatabase* instance;
-    std::vector<CameraInfo> data;
+  CameraDatabase(void);
+  void add(std::string const &maker, std::string const &model,
+           float sensor_width_mm, float sensor_height_mm, int sensor_width_px,
+           int sensor_height_px);
+
+private:
+  static CameraDatabase *instance;
+  std::vector<CameraInfo> data;
 };
 
 /* ------------------------ Implementation ------------------------ */
 
-inline CameraDatabase*
-CameraDatabase::get (void)
-{
-    if (CameraDatabase::instance == nullptr)
-        CameraDatabase::instance = new CameraDatabase();
-    return CameraDatabase::instance;
+inline CameraDatabase *CameraDatabase::get(void) {
+  if (CameraDatabase::instance == nullptr)
+    CameraDatabase::instance = new CameraDatabase();
+  return CameraDatabase::instance;
 }
-}
-}
-
+} // namespace base
+} // namespace my3d
 
 #endif // _MY3D_BASE_CAMERA_DATABASE_H_
