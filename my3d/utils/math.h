@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#ifdef __AVX__
+#include <immintrin.h>
+#endif
 
 #include "utils/eigen_types.h"
 

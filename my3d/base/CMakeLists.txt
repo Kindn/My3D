@@ -24,7 +24,8 @@ target_link_libraries(${PROJECT_NAME}_base ${PROJECT_NAME}_utils
                                             tinyexif
                                             ${OpenCV_LIBRARIES}
                                             ${GOPT_LIBRARIES}
-                                            ${BOOST_LIBRARIES})
+                                            ${BOOST_LIBRARIES}
+                                            OpenMP::OpenMP_CXX)
 
 add_executable(image_test image/image_test.cpp)
 target_link_libraries(image_test ${PROJECT_NAME}_base

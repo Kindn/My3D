@@ -3,7 +3,7 @@ project(my3d)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS " -std=c++17 -pthread")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -mavx2")
 
 find_package(OpenCV 4 REQUIRED)
 if (OpenCV_FOUND)
@@ -26,6 +26,11 @@ find_package(Boost 1.70 REQUIRED
     serialization)
 if (Boost_FOUND) 
     message("Boost ${Boost_VERSION} found.")
+endif()
+
+find_package(OpenMP REQUIRED)
+if (OpenMP_FOUND)
+    message("OpenMP ${OpenMP_VERSION} found.")
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/3rd_party/GraphOpt)

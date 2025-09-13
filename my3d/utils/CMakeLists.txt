@@ -5,6 +5,7 @@ eigen_types.h
 math.cpp math.h
 io.cpp io.h
 TicToc.cpp TicToc.h
+simd.cpp simd.h
 )
 
 target_link_libraries(${PROJECT_NAME}_utils ${Boost_LIBRARIES})

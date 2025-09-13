@@ -22,7 +22,7 @@ Image::Image(const size_t &rows, const size_t &cols, const size_t &channels)
   }
 
   size_t size = rows_ * cols_ * channels_;
-  data_ = new uint8_t[size]{0};
+  data_ = new ((std::align_val_t)32) uint8_t[size]{0};
 }
 
 Image::Image(const size_t &rows, const size_t &cols, const size_t &channels,
@@ -32,7 +32,7 @@ Image::Image(const size_t &rows, const size_t &cols, const size_t &channels,
       channels_(channels), id_{id}, name_{name}, camera_{camera} {
   size_t size = rows_ * cols_ * channels_;
   if (size > 0) {
-    data_ = new uint8_t[size];
+    data_ = new ((std::align_val_t)32) uint8_t[size];
     std::copy(data, data + size, data_);
   } else {
     data_ = nullptr;
@@ -52,7 +52,7 @@ Image::Image(const Image &other) {
     if (data_ != nullptr) {
       delete[] data_;
     }
-    data_ = new uint8_t[rows_ * cols_ * channels_];
+    data_ = new ((std::align_val_t)32) uint8_t[rows_ * cols_ * channels_];
     std::copy(other.data_, other.data_ + other.size() * other.channels_, data_);
   } else {
     if (data_ != nullptr) {
@@ -82,7 +82,7 @@ Image &Image::operator=(const Image &other) {
     if (data_ != nullptr) {
       delete[] data_;
     }
-    data_ = new uint8_t[rows_ * cols_ * channels_];
+    data_ = new ((std::align_val_t)32) uint8_t[rows_ * cols_ * channels_];
     std::copy(other.data_, other.data_ + other.size() * other.channels_, data_);
   } else {
     if (data_ != nullptr) {
@@ -113,7 +113,7 @@ void Image::set(const size_t &rows, const size_t &cols, const size_t &channels,
       delete[] data_;
     }
     const size_t size = rows * cols * channels;
-    data_ = new uint8_t[size];
+    data_ = new ((std::align_val_t)32) uint8_t[size];
     std::copy(data, data + size, data_);
     rows_ = rows;
     cols_ = cols;

@@ -10,6 +10,10 @@
 
 #include "base/image/Image.h"
 #include "utils/math.h"
+#include "utils/simd.h"
+
+#include <omp.h>
+#include <thread>
 
 namespace my3d {
 namespace base {
@@ -21,16 +25,16 @@ namespace base {
  * @param dst[out]  the blurred image
  * @param sigma     standard deviation of the Gaussian kernal
  */
-void blurGaussian(const Image &src, Image &dst, const double &sigma);
+void blurGaussianOld(const Image &src, Image &dst, const double &sigma);
 
 /**
- * @brief Blur an image using a (separated) Gaussian kernal 
- *TODO: Delete this function before merging
+ * @brief Blur an image using a (separated) Gaussian kernal
+ *
  * @param src       the source image
  * @param dst[out]  the blurred image
  * @param sigma     standard deviation of the Gaussian kernal
  */
-void blurGaussianNew(const Image &src, Image &dst, const double &sigma);
+void blurGaussian(const Image &src, Image &dst, const double &sigma);
 
 /**
  * @brief Blur an image using a (separated) Gaussian kernal and
