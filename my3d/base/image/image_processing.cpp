@@ -140,6 +140,10 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
                          static_cast<uint32_t>(src.at(row, c, ch));
         }
       }
+      for (size_t ch = 0; ch < channels; ++ch) {
+        tmp_dst.at(row, col, ch) =
+            static_cast<uint8_t>(util::clamp<double>(blurred(ch), 0, 255));
+      }
 #else  // __AVX__
       float const *pk = kernal;
       __m256i const c0{_mm256_set1_epi32(
@@ -220,6 +224,10 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
           blurred(ch) += kernal_i[half_size_kernal + idx] *
                          static_cast<uint32_t>(tmp_dst.at(r, col, ch));
         }
+      }
+      for (size_t ch = 0; ch < channels; ++ch) {
+        dst.at(row, col, ch) =
+            static_cast<uint8_t>(util::clamp<double>(blurred(ch), 0, 255));
       }
 #else  // __AVX__
       float const *pk = kernal;
