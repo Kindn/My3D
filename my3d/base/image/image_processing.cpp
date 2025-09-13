@@ -93,14 +93,16 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
   /* Compute Gaussian Kernal */
   const int half_size_kernal = std::ceil(3.0 * sigma);
   size_t const kernal_size{2UL * half_size_kernal + 1UL};
-  Eigen::VectorXf kernal(kernal_size);
+  float *const kernal{
+      (float *)aligned_alloc(sizeof(float) * kernal_size, 32UL)};
+  Eigen::Map<Eigen::VectorXf> kernal_map(kernal, kernal_size);
   for (int i = -half_size_kernal; i <= half_size_kernal; ++i) {
-    kernal(i + half_size_kernal) =
+    kernal_map(i + half_size_kernal) =
         std::exp(-0.5 * (i / sigma) *
                  (i / sigma)); // * (1.0 + (i + half_size_kernal) / 1000.0); //
                                // util::computeGaussian(i, sigma, 0.0);
   }
-  kernal /= kernal.sum();
+  kernal_map /= kernal_map.sum();
 
 #ifdef __AVX__
   size_t const kNumRemKernalValues{kernal_size % 8UL};
@@ -139,7 +141,7 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
         }
       }
 #else  // __AVX__
-      float const *pk = kernal.data();
+      float const *pk = kernal;
       __m256i const c0{_mm256_set1_epi32(
           static_cast<int32_t>(col) - static_cast<int32_t>(half_size_kernal))};
       for (size_t ch{0UL}; ch < channels; ++ch) {
@@ -147,7 +149,7 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
         size_t kernal_block_idx{0UL};
         __m256i offsets_vec{_mm256_add_epi32(kernal_offsets0, c0)};
         ALIGNED(32) int32_t offsets[8]{0};
-        for (int64_t i{0L}; i < kernal.size(); i += 8L) {
+        for (int64_t i{0L}; i < static_cast<int64_t>(kernal_size); i += 8L) {
           _mm256_store_si256((__m256i *)&offsets[0], offsets_vec);
           // __m256i const kernal_block{kernal_blocks[kernal_block_idx]};
           size_t const num_loaded{(i + 8UL > kernal_size) ? kNumRemKernalValues
@@ -220,13 +222,13 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
         }
       }
 #else  // __AVX__
-      float const *pk = kernal.data();
+      float const *pk = kernal;
       for (size_t ch{0UL}; ch < channels; ++ch) {
         __m256 sum_vec{_mm256_setzero_ps()};
         size_t kernal_block_idx{0UL};
         __m256i offsets_vec{_mm256_add_epi32(kernal_offsets0, r0)};
         ALIGNED(32) int32_t offsets[8]{0};
-        for (int64_t i{0L}; i < kernal.size(); i += 8L) {
+        for (int64_t i{0L}; i < static_cast<int64_t>(kernal_size); i += 8L) {
           // __m256i const kernal_block{kernal_blocks[kernal_block_idx]};
           size_t const num_loaded{(i + 8UL > kernal_size) ? kNumRemKernalValues
                                                           : 8UL};
@@ -281,6 +283,7 @@ void blurGaussian(const Image &src, Image &dst, const double &sigma) {
 #endif // __AVX__
     }
   }
+  std::free(kernal);
 }
 
 void blurGaussian(const Image &src, EigenVec<Eigen::MatrixXd> &dst,
