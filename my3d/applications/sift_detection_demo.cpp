@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
         const auto &octave = octaves[i]; 
         const auto &dog_space = octave.dog_space; 
         for (size_t l = 0; l < dog_space.getNumValidDoGLevels(); ++l) {
-            const Eigen::MatrixXd &dog = dog_space[l + 1]; 
+            const Eigen::MatrixXf &dog = dog_space[l + 1]; 
             const double max_dog = dog.maxCoeff(); 
             const double min_dog = dog.minCoeff(); 
             const double max_dog_abs = std::max(std::abs(min_dog), std::abs(max_dog)); 

@@ -43,7 +43,7 @@ public:
   /**
    * @brief Get the reference of level with given index (const version)
    */
-  const Eigen::MatrixXd &operator[](const size_t &level_idx) const {
+  const Eigen::MatrixXf &operator[](const size_t &level_idx) const {
     return levels_[level_idx];
   }
   // const base::Image &operator [] (const size_t &level_idx) const { return
@@ -52,7 +52,7 @@ public:
   /**
    * @brief Get the reference of level with given index
    */
-  Eigen::MatrixXd &operator[](const size_t &level_idx) {
+  Eigen::MatrixXf &operator[](const size_t &level_idx) {
     return levels_[level_idx];
   }
   // base::Image &operator [] (const size_t &level_idx) { return
@@ -99,7 +99,7 @@ public:
 
 protected:
   // EigenVec<base::Image> levels_;
-  EigenVec<Eigen::MatrixXd> levels_;
+  EigenVec<Eigen::MatrixXf> levels_;
   size_t width_{0};
   size_t height_{0};
   double sigma_{1.0};
@@ -136,14 +136,14 @@ public:
   /**
    * @brief Get the reference of level with given index (const version)
    */
-  const Eigen::MatrixXd &operator[](const size_t &level_idx) const {
+  const Eigen::MatrixXf &operator[](const size_t &level_idx) const {
     return levels_[level_idx];
   }
 
   /**
    * @brief Get the reference of level with given index
    */
-  Eigen::MatrixXd &operator[](const size_t &level_idx) {
+  Eigen::MatrixXf &operator[](const size_t &level_idx) {
     return levels_[level_idx];
   }
 
@@ -227,7 +227,7 @@ public:
                                  const size_t &valid_level_idx) const;
 
 protected:
-  EigenVec<Eigen::MatrixXd> levels_;
+  EigenVec<Eigen::MatrixXf> levels_;
   size_t width_{0};
   size_t height_{0};
   double sigma_{1.0};

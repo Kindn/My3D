@@ -57,7 +57,7 @@ bool GaussianSpace::build(const base::Image &base_image,
   }
 
   levels_.resize(num_levels);
-  levels_[0] = base_gray.toEigenMatrices<double>()[0] / 255.0;
+  levels_[0] = base_gray.toEigenMatrices<float>()[0] / 255.0;
   base::blurGaussian(levels_[0], levels_[0], sigma);
   double current_sigma = sigma;
   double last_sigma = sigma;
@@ -81,7 +81,7 @@ Eigen::Vector2d GaussianSpace::computeGradient(const size_t &x, const size_t &y,
                                                const size_t &level_idx) const {
   assert(x >= 1 && x <= width_ - 2);
   assert(y >= 1 && y <= height_ - 2);
-  const Eigen::MatrixXd &level = levels_[level_idx];
+  const Eigen::MatrixXf &level = levels_[level_idx];
 
   return Eigen::Vector2d(0.5 * (level(y, x + 1) - level(y, x - 1)),
                          0.5 * (level(y + 1, x) - level(y - 1, x)));
@@ -171,9 +171,9 @@ bool DoGSpace::isExtremumPoint(const size_t &valid_level_idx, const size_t &x,
     return false;
   }
 
-  const Eigen::MatrixXd &last_level = levels_[valid_level_idx];
-  const Eigen::MatrixXd &curr_level = levels_[valid_level_idx + 1];
-  const Eigen::MatrixXd &next_level = levels_[valid_level_idx + 2];
+  const Eigen::MatrixXf &last_level = levels_[valid_level_idx];
+  const Eigen::MatrixXf &curr_level = levels_[valid_level_idx + 1];
+  const Eigen::MatrixXf &next_level = levels_[valid_level_idx + 2];
   const double value = curr_level(y, x);
   // bool is_min = true, is_max = true;
   // for (size_t r = y - 1; r <= y + 1 && (is_min || is_max); ++r) {
@@ -244,7 +244,7 @@ size_t DoGSpace::detectExtrema(const size_t &valid_level_idx,
     return 0;
   }
 
-  const Eigen::MatrixXd &curr_level = levels_[valid_level_idx + 1];
+  const Eigen::MatrixXf &curr_level = levels_[valid_level_idx + 1];
   for (size_t x = 1; x < width_ - 1; ++x) {
     for (size_t y = 1; y < height_ - 1; ++y) {
       if (isExtremumPoint(valid_level_idx, x, y, thresh)) {
@@ -357,9 +357,9 @@ Eigen::Vector3d DoGSpace::computeGradient(const size_t &x, const size_t &y,
   const size_t num_valid_levels = getNumValidDoGLevels();
   assert(valid_level_idx < num_valid_levels);
 
-  const Eigen::MatrixXd &last_level = levels_[valid_level_idx];
-  const Eigen::MatrixXd &curr_level = levels_[valid_level_idx + 1];
-  const Eigen::MatrixXd &next_level = levels_[valid_level_idx + 2];
+  const Eigen::MatrixXf &last_level = levels_[valid_level_idx];
+  const Eigen::MatrixXf &curr_level = levels_[valid_level_idx + 1];
+  const Eigen::MatrixXf &next_level = levels_[valid_level_idx + 2];
 
   Eigen::Vector3d gradient;
   gradient.x() = 0.5 * (curr_level(y, x + 1) - curr_level(y, x - 1));
@@ -376,9 +376,9 @@ Eigen::Matrix3d DoGSpace::computeHessian(const size_t &x, const size_t &y,
   const size_t num_valid_levels = getNumValidDoGLevels();
   assert(valid_level_idx < num_valid_levels);
 
-  const Eigen::MatrixXd &last_level = levels_[valid_level_idx];
-  const Eigen::MatrixXd &curr_level = levels_[valid_level_idx + 1];
-  const Eigen::MatrixXd &next_level = levels_[valid_level_idx + 2];
+  const Eigen::MatrixXf &last_level = levels_[valid_level_idx];
+  const Eigen::MatrixXf &curr_level = levels_[valid_level_idx + 1];
+  const Eigen::MatrixXf &next_level = levels_[valid_level_idx + 2];
 
   double hxx, hyy, hss, hxy, hxs, hys;
   hxx = curr_level(y, x + 1) + curr_level(y, x - 1) - 2.0 * curr_level(y, x);
