@@ -14,18 +14,10 @@
 
 #include <omp.h>
 #include <thread>
+#include <stdlib.h>
 
 namespace my3d {
 namespace base {
-
-/**
- * @brief Blur an image using a (separated) Gaussian kernal
- *
- * @param src       the source image
- * @param dst[out]  the blurred image
- * @param sigma     standard deviation of the Gaussian kernal
- */
-void blurGaussianOld(const Image &src, Image &dst, const double &sigma);
 
 /**
  * @brief Blur an image using a (separated) Gaussian kernal
@@ -58,6 +50,18 @@ void blurGaussian(const Image &src, EigenVec<Eigen::MatrixXd> &dst,
  * @param sigma     standard deviation of the Gaussian kernal
  */
 void blurGaussian(const Eigen::MatrixXd &src, Eigen::MatrixXd &dst,
+                  const double &sigma);
+
+/**
+ * @brief Blur an image (represented by Eigen Matrix) using a (separated)
+ * Gaussian kernal and use Eigen::MatrixXd matrices to store the result (each
+ * matrix represents a channel)
+ *
+ * @param src       the source image
+ * @param dst[out]  the blurred image
+ * @param sigma     standard deviation of the Gaussian kernal
+ */
+void blurGaussian(const Eigen::MatrixXf &src, Eigen::MatrixXf &dst,
                   const double &sigma);
 
 /**

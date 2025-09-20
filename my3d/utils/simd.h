@@ -44,6 +44,12 @@ __m256 avx_load_first_n_ps(float const *p, size_t const n);
 __m256d avx_load_first_n_pd(double const *p, size_t const n);
 
 __m256i avx_load_first_n_epi32(int32_t const *p, size_t const n);
+
+__m256i avx_min_epi64(__m256i const &a, __m256i const &b);
+
+__m256i avx_max_epi64(__m256i const &a, __m256i const &b);
+
+__m256i avx_clamp_epi32(__m256i const &a, __m256i const &l, __m256i const &u);
 #endif // __AVX__
 
 } // namespace simd

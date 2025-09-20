@@ -4,6 +4,7 @@ project(my3d)
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS " -std=c++17 -pthread")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -mavx2")
+set(CMAKE_CXX_FLAGS_DEBUG "-O3 -mavx2")
 
 find_package(OpenCV 4 REQUIRED)
 if (OpenCV_FOUND)

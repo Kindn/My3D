@@ -27,6 +27,20 @@ __m256i avx_load_first_n_epi32(int32_t const *p, size_t const n) {
   return _mm256_maskload_epi32(p, mask);
 }
 
+__m256i avx_min_epi64(__m256i const &a, __m256i const &b) {
+  __m256i mask = _mm256_cmpgt_epi64(a, b);
+  return _mm256_blendv_epi8(b, a, mask);
+}
+
+__m256i avx_max_epi64(__m256i const &a, __m256i const &b) {
+  __m256i mask = _mm256_cmpgt_epi64(b, a);
+  return _mm256_blendv_epi8(b, a, mask);
+}
+
+__m256i avx_clamp_epi32(__m256i const &a, __m256i const &l, __m256i const &u) {
+  return _mm256_min_epi32(u, _mm256_max_epi32(l, a));
+}
+
 #endif // __AVX__
 
 } // namespace simd

@@ -1,5 +1,6 @@
 #include "base/image/OpenCVImageReader.h"
 #include "feature/sift.h" 
+#include "utils/TicToc.h"
 
 using namespace my3d; 
 
@@ -25,12 +26,15 @@ int main(int argc, char **argv) {
     config.num_octaves = -1;
     config.min_abs_resp = 0.02; 
     config.edge_score_thresh = 10.0; 
-    config.verbose = true; 
+    config.verbose = false; 
     feature::SIFTDetector detector(config); 
 
+    util::TicToc tic_toc{};
+    tic_toc.tic();
     detector.setImage(image); 
     detector.detect(key_points); 
     detector.compute(key_points, descriptors); 
+    std::cout << "Time: " << tic_toc.toc() << "s. " << std::endl;
 
     base::Image image_with_features; 
     const uint8_t color[3] = {0, 255, 0};
@@ -45,11 +49,12 @@ int main(int argc, char **argv) {
         return des1.scale > des2.scale; 
     }); 
 
-    std::cout << "Descriptors: " << std::endl; 
-    for (const auto &des : descriptors) {
-        std::cout << "===> " << des.point.transpose() << " ";
-        des.printHist(); 
-    }
+    std::cout << "Detected " << descriptors.size() << " descriptors. " << std::endl;
+    // std::cout << "Descriptors: " << std::endl; 
+    // for (const auto &des : descriptors) {
+    //     std::cout << "===> " << des.point.transpose() << " ";
+    //     des.printHist(); 
+    // }
 
     const auto octaves = detector.getOctaves(); 
     for (size_t i = 0; i < octaves.size(); ++i) {
