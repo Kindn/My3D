@@ -70,6 +70,10 @@ Image::~Image() {
 }
 
 Image &Image::operator=(const Image &other) {
+  if (this == &other) {
+    return *this;
+  }
+
   step0_ = other.step0_;
   step1_ = other.step1_;
   rows_ = other.rows_;
