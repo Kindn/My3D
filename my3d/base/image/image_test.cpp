@@ -15,8 +15,8 @@ BOOST_AUTO_TEST_CASE(TestImageConsistencyWithOpenCVMat) {
   std::cout << 1 << std::endl;
   my3d::base::Image my3d_img(640, 480, 3, cv_img.data);
 
-  for (size_t row = 0; row < 640; ++row) {
-    for (size_t col = 0; col < 480; ++col) {
+  for (size_t row = 0UL; row < 640; ++row) {
+    for (size_t col = 0UL; col < 480; ++col) {
       for (size_t channel = 0; channel < 3; ++channel) {
         // std::cout << "Comparing element at (" << row << ", " << col << ", "
         // << channel <<") ..."; std::cout << my3d_img.at(row, col, channel) <<

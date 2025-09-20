@@ -65,10 +65,6 @@ bool GaussianSpace::build(const base::Image &base_image,
     current_sigma *= scale_factor;
     const double incre_sigma =
         std::sqrt(current_sigma * current_sigma - last_sigma * last_sigma);
-    // EigenVec<Eigen::MatrixXd> tmp;
-    // base::blurGaussian(base_gray, tmp, current_sigma);
-    // levels_[level] = tmp[0];
-    // base::blurGaussian(base_gray, levels_[level], current_sigma);
     base::blurGaussian(levels_[level - 1], levels_[level], incre_sigma);
     std::cout << "\r[INFO] Building Gaussian space. " << level + 1 << "/"
               << num_levels;

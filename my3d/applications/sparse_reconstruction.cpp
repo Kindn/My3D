@@ -136,8 +136,8 @@ bool saveFeaturesAsJSON(const std::string &directory,
                     feats_json.array_get(2) = features[i].colors[j].x(); 
                     feats_json.array_get(3) = features[i].colors[j].y(); 
                     feats_json.array_get(4) = features[i].colors[j].z(); 
-                    for (size_t col = 0; col < 16; ++col) {
-                        for (size_t row = 0; row < 8; ++row) {
+                    for (size_t col = 0UL; col < 16; ++col) {
+                        for (size_t row = 0UL; row < 8; ++row) {
                             const size_t idx = col * 8 + row; 
                             feats_json.array_get(5 + idx) = features[i].descriptors[j].histograms(row, col); 
                         }
@@ -248,8 +248,8 @@ bool loadFeaturesFromJSON(const std::string &directory,
                                                 static_cast<uint8_t>(kpt_json_vec[3]->as_int()), 
                                                 static_cast<uint8_t>(kpt_json_vec[4]->as_int())); 
                     Eigen::Matrix<double, 8, 16> hist; 
-                    for (size_t col = 0; col < 16; ++col) {
-                        for (size_t row = 0; row < 8; ++row) {
+                    for (size_t col = 0UL; col < 16; ++col) {
+                        for (size_t row = 0UL; row < 8; ++row) {
                             const size_t idx = col * 8 + row; 
                             hist(row, col) = kpt_json_vec[5 + idx]->as_double(); 
                         }

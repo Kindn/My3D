@@ -57,8 +57,8 @@ struct SIFTDescriptor {
 
   void printHist() const {
     std::cout << "[";
-    for (size_t col = 0; col < 16; ++col) {
-      for (size_t row = 0; row < 8; ++row) {
+    for (size_t col = 0UL; col < 16; ++col) {
+      for (size_t row = 0UL; row < 8; ++row) {
         std::cout << histograms(row, col) << " ";
       }
     }
