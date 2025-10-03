@@ -274,7 +274,7 @@ void decomposeEssentialMatrix(const Eigen::Matrix3d &E,
 
 Eigen::Matrix3d essentialMatrixFromPose(const Eigen::Matrix3d &R, 
                                         const Eigen::Vector3d &t) {
-    return util::skewSymmetric(t.normalized()) * R; 
+    return util::getSkewSymmetric(t.normalized()) * R; 
 }
 
 void poseFromEssentialMatrix(const Eigen::Matrix3d &E, 

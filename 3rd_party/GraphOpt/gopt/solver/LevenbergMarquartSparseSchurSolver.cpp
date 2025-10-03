@@ -1,15 +1,15 @@
 /*
- * filename: LevenbergMarquartSparseShurSolver.cpp
+ * filename: LevenbergMarquartSparseSchurSolver.cpp
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
  * brief:    
  */
 
-#include "solver/LevenbergMarquartSparseShurSolver.h"
+#include "solver/LevenbergMarquartSparseSchurSolver.h"
 
 namespace gopt {
 
-void LevenbergMarquartSparseShurSolver::setGraph(FactorGraph *graph) {
+void LevenbergMarquartSparseSchurSolver::setGraph(FactorGraph *graph) {
     OptSolverBase::setGraph(graph);
 
     dim_res_ = graph_->getDimResidual();
@@ -29,7 +29,7 @@ void LevenbergMarquartSparseShurSolver::setGraph(FactorGraph *graph) {
     Hrr_blocks_.reserve(dim_r_);
     Hrm_blocks_.reserve(dim_r_);
     Hrr_.resize(dim_r_, dim_r_);
-    Hrr_Shur_.resize(dim_r_, dim_r_);
+    Hrr_Schur_.resize(dim_r_, dim_r_);
     Hmm_inv_.resize(dim_marg_, dim_marg_);
     Hrm_.resize(dim_r_, dim_marg_);
     Irr_.resize(dim_r_, dim_r_), Irr_.setIdentity();
@@ -39,7 +39,7 @@ void LevenbergMarquartSparseShurSolver::setGraph(FactorGraph *graph) {
 }
 
 
-int LevenbergMarquartSparseShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::VectorXd &residual) {
+int LevenbergMarquartSparseSchurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::VectorXd &residual) {
     assert(graph_ != nullptr && "Graph should not be null. ");
 
     // Compute Jacobian
@@ -85,7 +85,7 @@ int LevenbergMarquartSparseShurSolver::solve(Eigen::VectorXd &delta, double &cos
     do {
         // Solve the block system
         std::cout << "Solving block system ... lambda = " << lambda_ << ", rho = " << rho_ << std::endl;
-        success = solveBlockSystemShur(delta);
+        success = solveBlockSystemSchur(delta);
         // update lamda_ and nu_
         updateLambdaAndNu(cost, delta);
         if (!std::isfinite(lambda_)) {
@@ -101,7 +101,7 @@ int LevenbergMarquartSparseShurSolver::solve(Eigen::VectorXd &delta, double &cos
     }
 }
 
-void LevenbergMarquartSparseShurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge, 
+void LevenbergMarquartSparseSchurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge, 
                                           const Eigen::MatrixXd &info, 
                                           double loss_grad) {
     for (size_t i = 0; i < edge->vertices_.size(); ++i) {
@@ -185,7 +185,7 @@ void LevenbergMarquartSparseShurSolver::buildBlockSystem(const FactorGraph::Edge
     }
 }
 
-bool LevenbergMarquartSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &delta) {
+bool LevenbergMarquartSparseSchurSolver::solveBlockSystemSchur(Eigen::VectorXd &delta) {
     // Compute the inverse of Hrr
     Hmm_inv_blocks_.reserve(Hmm_blocks_.size());
     for (auto &block : Hmm_blocks_) {
@@ -193,21 +193,21 @@ bool LevenbergMarquartSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &de
             (block.second + lambda_ * Eigen::MatrixXd::Identity(block.second.rows(), block.second.rows())).inverse();
     }
 
-    // Compute Shur complement
+    // Compute Schur complement
     fillSparseMatrices();
     delta.resize(dim_var_);
     Eigen::VectorXd b;
     // Solve for delta
     if (dim_marg_ > 0) {
         if (dim_r_ > 0) {
-            Hrr_Shur_ = Hrr_ + lambda_ * Irr_ - Hrm_ * Hmm_inv_ * SpMatType(Hrm_.transpose());
-            brr_Shur_ = brr_ - Hrm_ * Hmm_inv_ * bmm_;
+            Hrr_Schur_ = Hrr_ + lambda_ * Irr_ - Hrm_ * Hmm_inv_ * SpMatType(Hrm_.transpose());
+            brr_Schur_ = brr_ - Hrm_ * Hmm_inv_ * bmm_;
             if (init_) {
-                Hrr_Shur_Chol_.analyzePattern(Hrr_Shur_);
+                Hrr_Schur_Chol_.analyzePattern(Hrr_Schur_);
             }
-            Hrr_Shur_Chol_.factorize(Hrr_Shur_);
+            Hrr_Schur_Chol_.factorize(Hrr_Schur_);
             // Solve for delta_r
-            delta.head(dim_r_) = Hrr_Shur_Chol_.solve(brr_Shur_);
+            delta.head(dim_r_) = Hrr_Schur_Chol_.solve(brr_Schur_);
             b = bmm_ - SpMatType(Hrm_.transpose()) * delta.head(dim_r_);
 
             if (std::isnan(delta(0))) {
@@ -227,13 +227,13 @@ bool LevenbergMarquartSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &de
         }
         
     } else if (dim_r_ > 0) {
-        Hrr_Shur_ = Hrr_;
-        brr_Shur_ = brr_;
+        Hrr_Schur_ = Hrr_;
+        brr_Schur_ = brr_;
         if (init_) {
-            Hrr_Shur_Chol_.analyzePattern(Hrr_Shur_);
+            Hrr_Schur_Chol_.analyzePattern(Hrr_Schur_);
         }
-        Hrr_Shur_Chol_.factorize(Hrr_Shur_);
-        delta = Hrr_Shur_Chol_.solve(brr_Shur_);
+        Hrr_Schur_Chol_.factorize(Hrr_Schur_);
+        delta = Hrr_Schur_Chol_.solve(brr_Schur_);
 
         // std::cout << "dim_r = " << dim_r_ << " " 
         //       << "dim_var = " << dim_var_ << " "
@@ -252,7 +252,7 @@ bool LevenbergMarquartSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &de
     return true;
 }
 
-void LevenbergMarquartSparseShurSolver::fillSparseMatrices() {
+void LevenbergMarquartSparseSchurSolver::fillSparseMatrices() {
     std::vector<Eigen::Triplet<double>> triplets;
     triplets.reserve(dim_r_);
     for (typename std::unordered_map<size_t, Eigen::MatrixXd>::const_iterator it = Hrr_blocks_.begin(); 
@@ -293,7 +293,7 @@ void LevenbergMarquartSparseShurSolver::fillSparseMatrices() {
     Hrm_.setFromTriplets(triplets.begin(), triplets.end());
 }
 
-void LevenbergMarquartSparseShurSolver::updateLambdaAndNu(double cost, const Eigen::VectorXd &delta) {
+void LevenbergMarquartSparseSchurSolver::updateLambdaAndNu(double cost, const Eigen::VectorXd &delta) {
     if (true) {
         double new_cost = computeNewCost(delta);
         double delta_cost = new_cost - cost;
@@ -317,7 +317,7 @@ void LevenbergMarquartSparseShurSolver::updateLambdaAndNu(double cost, const Eig
     }
 }
 
-double LevenbergMarquartSparseShurSolver::computeNewCost(const Eigen::VectorXd &delta) {
+double LevenbergMarquartSparseSchurSolver::computeNewCost(const Eigen::VectorXd &delta) {
     FactorGraph::EdgeSet edges = graph_->getEdges();
     FactorGraph::VertexSet vertices = graph_->getVertices();
 
@@ -347,7 +347,7 @@ double LevenbergMarquartSparseShurSolver::computeNewCost(const Eigen::VectorXd &
     return new_cost;
 }
 
-void LevenbergMarquartSparseShurSolver::computeInitLambda() {
+void LevenbergMarquartSparseSchurSolver::computeInitLambda() {
     lambda_ = -std::numeric_limits<double>::infinity();
     for (auto &block : Hrr_blocks_) {
         for (int i = 0; i < block.second.rows(); ++i) {

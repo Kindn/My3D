@@ -1,5 +1,5 @@
 /*
- * filename: GaussNewtonShurSolver.h
+ * filename: GaussNewtonSchurSolver.h
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
  * brief:    
@@ -12,12 +12,12 @@
 
 namespace gopt {
 
-class GaussNewtonShurSolver : public OptSolverBase, public std::enable_shared_from_this<GaussNewtonShurSolver> {
+class GaussNewtonSchurSolver : public OptSolverBase, public std::enable_shared_from_this<GaussNewtonSchurSolver> {
     friend class FactorGraph;
 public: 
-    GaussNewtonShurSolver(): 
+    GaussNewtonSchurSolver(): 
     OptSolverBase() {}
-    virtual ~GaussNewtonShurSolver() {}
+    virtual ~GaussNewtonSchurSolver() {}
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -30,7 +30,7 @@ public:
                      const Eigen::MatrixXd &info, 
                      double loss_grad);
 
-    bool solveBlockSystemShur(Eigen::VectorXd &delta);
+    bool solveBlockSystemSchur(Eigen::VectorXd &delta);
 
 protected: 
     SpMatType Hmm_;
@@ -42,7 +42,7 @@ protected:
     size_t dim_var_;
     size_t dim_marg_;
     size_t dim_r_;
-    Eigen::SimplicialCholesky<SpMatType> Hrr_Shur_Chol_;
+    Eigen::SimplicialCholesky<SpMatType> Hrr_Schur_Chol_;
     Eigen::SimplicialCholesky<SpMatType> Hmm_Chol_;
 };
 

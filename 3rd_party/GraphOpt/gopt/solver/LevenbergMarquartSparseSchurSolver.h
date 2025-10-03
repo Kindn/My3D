@@ -1,5 +1,5 @@
 /*
- * filename: GaussNewtonSparseShurSolver.h
+ * filename: LevenbergMarquartSparseSchurSolver.h
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
  * brief:    
@@ -9,8 +9,8 @@
 
 #include "solver/OptSolverBase.h"
 
-#ifndef _GOPT_GAUSS_NEWTON_SPARSE_SOLVER_
-#define _GOPT_GAUSS_NEWTON_SPARSE_SOLVER_
+#ifndef _GOPT_LEVENBERG_MARQUART_SPARSE_SOLVER_
+#define _GOPT_LEVENBERG_MARQUART_SPARSE_SOLVER_
 
 namespace gopt {
 
@@ -19,12 +19,12 @@ namespace gopt {
  * Bundle-Adjustment problem. All the edges in the graph should be binary edge, and
  * each of them should connect a marginalized vertex and a in-marginalized vertex.
 */
-class GaussNewtonSparseShurSolver : public OptSolverBase, public std::enable_shared_from_this<GaussNewtonSparseShurSolver> {
+class LevenbergMarquartSparseSchurSolver : public OptSolverBase, public std::enable_shared_from_this<LevenbergMarquartSparseSchurSolver> {
     friend class FactorGraph;
 public: 
-    GaussNewtonSparseShurSolver(): 
+    LevenbergMarquartSparseSchurSolver(): 
     OptSolverBase() {}
-    virtual ~GaussNewtonSparseShurSolver() {}
+    virtual ~LevenbergMarquartSparseSchurSolver() {}
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -37,29 +37,48 @@ public:
                             const Eigen::MatrixXd &info, 
                             double loss_grad);
 
-    bool solveBlockSystemShur(Eigen::VectorXd &delta);
+    bool solveBlockSystemSchur(Eigen::VectorXd &delta);
 
     void fillSparseMatrices();
+
+    void setLambda(double lambda) { lambda_ = lambda; }
+
+    void updateLambdaAndNu(double cost, const Eigen::VectorXd &delta);
+
+    double computeNewCost(const Eigen::VectorXd &delta);
+
+    void computeInitLambda();
 
 protected: 
     std::unordered_map<size_t, Eigen::MatrixXd> Hmm_blocks_, Hmm_inv_blocks_;
     std::unordered_map<size_t, Eigen::MatrixXd> Hrr_blocks_;
     std::unordered_map<size_t, std::unordered_map<size_t, Eigen::MatrixXd>> Hrm_blocks_;
-    SpMatType Hrr_, Hrr_Shur_;
+    SpMatType Hrr_, Hrr_Schur_;
     SpMatType Hmm_inv_;
     SpMatType Hrm_;
-    Eigen::SimplicialCholesky<SpMatType> Hrr_Shur_Chol_;
+    SpMatType Irr_, Imm_;
+    Eigen::SimplicialCholesky<SpMatType> Hrr_Schur_Chol_;
     Eigen::VectorXd bmm_;
-    Eigen::VectorXd brr_, brr_Shur_;
+    Eigen::VectorXd brr_, brr_Schur_;
     size_t dim_res_;
     size_t dim_var_;
     size_t dim_marg_;
     size_t num_marg_;
     size_t dim_r_;
     size_t num_r_;
+    double lambda_, nu_{2.0};
+    Eigen::VectorXd last_delta_;
+    Eigen::VectorXd residual_;
+    // double last_cost_;
+    double rho_;
+    bool update_flag_{true};
+    double lambda_scale_upper_{2. / 3.};
+    double lambda_scale_lower_{1. / 3.};
+    // VecMatrixXd informations_;
+    // std::vector<double> loss_grads_;
 };
 
 }
 
-#endif // _GAUSS_NEWTON_SPARSE_SOLVER_H_
+#endif // _LEVENBERG_MARQUART_SPARSE_SOLVER_H_
 

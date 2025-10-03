@@ -22,9 +22,9 @@
 #include "gopt/graph/BaseVertex.h"
 #include "gopt/loss/HuberLoss.h"
 #include "gopt/solver/GaussNewtonSolver.h"
-#include "gopt/solver/GaussNewtonShurSolver.h"
-#include "gopt/solver/GaussNewtonSparseShurSolver.h"
-#include "gopt/solver/LevenbergMarquartSparseShurSolver.h"
+#include "gopt/solver/GaussNewtonSchurSolver.h"
+#include "gopt/solver/GaussNewtonSparseSchurSolver.h"
+#include "gopt/solver/LevenbergMarquartSparseSchurSolver.h"
 
 namespace gopt{
     struct VertexCamera; 

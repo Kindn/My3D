@@ -1,15 +1,15 @@
 /*
- * filename: GaussNewtonShurSolver.cpp
+ * filename: GaussNewtonSchurSolver.cpp
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
  * brief:    
  */
 
-#include "solver/GaussNewtonShurSolver.h"
+#include "solver/GaussNewtonSchurSolver.h"
 
 namespace gopt {
 
-void GaussNewtonShurSolver::setGraph(FactorGraph *graph) {
+void GaussNewtonSchurSolver::setGraph(FactorGraph *graph) {
     OptSolverBase::setGraph(graph);
 
     dim_res_ = graph_->getDimResidual();
@@ -25,7 +25,7 @@ void GaussNewtonShurSolver::setGraph(FactorGraph *graph) {
 }
 
 
-int GaussNewtonShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::VectorXd &residual) {
+int GaussNewtonSchurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::VectorXd &residual) {
     assert(graph_ != nullptr && "Graph should not be null. ");
 
     // Compute Jacobian
@@ -60,7 +60,7 @@ int GaussNewtonShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::Ve
     
     // Solve the block system
     std::cout << "Solving block system ... " << std::endl;
-    bool success = solveBlockSystemShur(delta);
+    bool success = solveBlockSystemSchur(delta);
 
     if (!success) {
         return 1;
@@ -70,7 +70,7 @@ int GaussNewtonShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::Ve
     }
 }
 
-void GaussNewtonShurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge, 
+void GaussNewtonSchurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge, 
                                           const Eigen::MatrixXd &info, 
                                           double loss_grad) {
     for (size_t i = 0; i < edge->vertices_.size(); ++i) {
@@ -119,7 +119,7 @@ void GaussNewtonShurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge,
     }
 }
 
-bool GaussNewtonShurSolver::solveBlockSystemShur(Eigen::VectorXd &delta) {
+bool GaussNewtonSchurSolver::solveBlockSystemSchur(Eigen::VectorXd &delta) {
     if (init_) {
         Hmm_Chol_.analyzePattern(Hrr_);
     }
@@ -128,15 +128,15 @@ bool GaussNewtonShurSolver::solveBlockSystemShur(Eigen::VectorXd &delta) {
     if (dim_marg_ > 0) {
         // SpMatType identity(dim_var_ - dim_marg_, dim_var_ - dim_marg_);
         SpMatType Hmm_inv_Hrm_T = Hmm_Chol_.solve(SpMatType(Hrm_.transpose()));
-        SpMatType Hrr_Shur_ = Hrr_ - Hrm_ * Hmm_inv_Hrm_T;
+        SpMatType Hrr_Schur_ = Hrr_ - Hrm_ * Hmm_inv_Hrm_T;
         if (init_) {
-            Hrr_Shur_Chol_.analyzePattern(Hrr_Shur_);
+            Hrr_Schur_Chol_.analyzePattern(Hrr_Schur_);
         }
-        Hrr_Shur_Chol_.factorize(Hrr_Shur_);
-        Eigen::VectorXd brr_Shur = brr_ - Hrm_ * Hmm_Chol_.solve(bmm_);
+        Hrr_Schur_Chol_.factorize(Hrr_Schur_);
+        Eigen::VectorXd brr_Schur = brr_ - Hrm_ * Hmm_Chol_.solve(bmm_);
 
         delta.resize(dim_var_);
-        delta.head(dim_r_) = Hrr_Shur_Chol_.solve(brr_Shur);
+        delta.head(dim_r_) = Hrr_Schur_Chol_.solve(brr_Schur);
         delta.tail(dim_var_ -dim_r_) = Hmm_Chol_.solve(bmm_ - Hrm_.transpose() * delta.head(dim_r_));
     } else {
         delta = Hmm_Chol_.solve(brr_);

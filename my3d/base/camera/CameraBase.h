@@ -22,6 +22,12 @@ struct CameraBase {
     */
     virtual Eigen::Vector2d pix2Norm(const Eigen::Vector2d &pix) const = 0; 
 
+    /** 
+     * @brief Transform a pixel to 3D sphere (ray direction) 
+    */
+    virtual Eigen::Vector3d pix2Sphere(const Eigen::Vector2d &pix) const = 0; 
+
+
     /**
      * @brief Convert a threshold in pixel plane to normalized plane 
     */

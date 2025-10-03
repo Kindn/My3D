@@ -1,15 +1,15 @@
 /*
- * filename: GaussNewtonSparseShurSolver.cpp
+ * filename: GaussNewtonSparseSchurSolver.cpp
  * author:   Peiyan Liu, HITSZ
  * E-mail:   1434615509@qq.com
  * brief:    
  */
 
-#include "solver/GaussNewtonSparseShurSolver.h"
+#include "solver/GaussNewtonSparseSchurSolver.h"
 
 namespace gopt {
 
-void GaussNewtonSparseShurSolver::setGraph(FactorGraph *graph) {
+void GaussNewtonSparseSchurSolver::setGraph(FactorGraph *graph) {
     OptSolverBase::setGraph(graph);
 
     dim_res_ = graph_->getDimResidual();
@@ -29,7 +29,7 @@ void GaussNewtonSparseShurSolver::setGraph(FactorGraph *graph) {
     Hrr_blocks_.reserve(dim_r_);
     Hrm_blocks_.reserve(dim_r_);
     Hrr_.resize(dim_r_, dim_r_);
-    Hrr_Shur_.resize(dim_r_, dim_r_);
+    Hrr_Schur_.resize(dim_r_, dim_r_);
     Hmm_inv_.resize(dim_marg_, dim_marg_);
     Hrm_.resize(dim_r_, dim_marg_);
     bmm_ = Eigen::VectorXd::Zero(dim_marg_);
@@ -37,7 +37,7 @@ void GaussNewtonSparseShurSolver::setGraph(FactorGraph *graph) {
 }
 
 
-int GaussNewtonSparseShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::VectorXd &residual) {
+int GaussNewtonSparseSchurSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::VectorXd &residual) {
     assert(graph_ != nullptr && "Graph should not be null. ");
 
     // Compute Jacobian
@@ -75,7 +75,7 @@ int GaussNewtonSparseShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eig
     
     // Solve the block system
     std::cout << "Solving block system ... " << std::endl;
-    bool success = solveBlockSystemShur(delta);
+    bool success = solveBlockSystemSchur(delta);
 
     if (!success) {
         return 1;
@@ -85,7 +85,7 @@ int GaussNewtonSparseShurSolver::solve(Eigen::VectorXd &delta, double &cost, Eig
     }
 }
 
-void GaussNewtonSparseShurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge, 
+void GaussNewtonSparseSchurSolver::buildBlockSystem(const FactorGraph::EdgePtr & edge, 
                                           const Eigen::MatrixXd &info, 
                                           double loss_grad) {
     for (size_t i = 0; i < edge->vertices_.size(); ++i) {
@@ -164,28 +164,28 @@ void GaussNewtonSparseShurSolver::buildBlockSystem(const FactorGraph::EdgePtr & 
     }
 }
 
-bool GaussNewtonSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &delta) {
+bool GaussNewtonSparseSchurSolver::solveBlockSystemSchur(Eigen::VectorXd &delta) {
     // Compute the inverse of Hrr
     Hmm_inv_blocks_.reserve(Hmm_blocks_.size());
     for (auto &block : Hmm_blocks_) {
         Hmm_inv_blocks_[block.first] = block.second.inverse();
     }
 
-    // Compute Shur complement
+    // Compute Schur complement
     fillSparseMatrices();
     delta.resize(dim_var_);
     Eigen::VectorXd b;
     // Solve for delta
     if (dim_marg_ > 0) {
         if (dim_r_ > 0) {
-            Hrr_Shur_ = Hrr_ - Hrm_ * Hmm_inv_ * SpMatType(Hrm_.transpose());
-            brr_Shur_ = brr_ - Hrm_ * Hmm_inv_ * bmm_;
+            Hrr_Schur_ = Hrr_ - Hrm_ * Hmm_inv_ * SpMatType(Hrm_.transpose());
+            brr_Schur_ = brr_ - Hrm_ * Hmm_inv_ * bmm_;
             if (init_) {
-                Hrr_Shur_Chol_.analyzePattern(Hrr_Shur_);
+                Hrr_Schur_Chol_.analyzePattern(Hrr_Schur_);
             }
-            Hrr_Shur_Chol_.factorize(Hrr_Shur_);
+            Hrr_Schur_Chol_.factorize(Hrr_Schur_);
             // Solve for delta_r
-            delta.head(dim_r_) = Hrr_Shur_Chol_.solve(brr_Shur_);
+            delta.head(dim_r_) = Hrr_Schur_Chol_.solve(brr_Schur_);
             b = bmm_ - SpMatType(Hrm_.transpose()) * delta.head(dim_r_);
 
             if (std::isnan(delta(0))) {
@@ -205,13 +205,13 @@ bool GaussNewtonSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &delta) {
         }
         
     } else if (dim_r_ > 0) {
-        Hrr_Shur_ = Hrr_;
-        brr_Shur_ = brr_;
+        Hrr_Schur_ = Hrr_;
+        brr_Schur_ = brr_;
         if (init_) {
-            Hrr_Shur_Chol_.analyzePattern(Hrr_Shur_);
+            Hrr_Schur_Chol_.analyzePattern(Hrr_Schur_);
         }
-        Hrr_Shur_Chol_.factorize(Hrr_Shur_);
-        delta = Hrr_Shur_Chol_.solve(brr_Shur_);
+        Hrr_Schur_Chol_.factorize(Hrr_Schur_);
+        delta = Hrr_Schur_Chol_.solve(brr_Schur_);
 
         // std::cout << "dim_r = " << dim_r_ << " " 
         //       << "dim_var = " << dim_var_ << " "
@@ -230,7 +230,7 @@ bool GaussNewtonSparseShurSolver::solveBlockSystemShur(Eigen::VectorXd &delta) {
     return true;
 }
 
-void GaussNewtonSparseShurSolver::fillSparseMatrices() {
+void GaussNewtonSparseSchurSolver::fillSparseMatrices() {
     std::vector<Eigen::Triplet<double>> triplets;
     triplets.reserve(dim_r_);
     for (typename std::unordered_map<size_t, Eigen::MatrixXd>::const_iterator it = Hrr_blocks_.begin(); 

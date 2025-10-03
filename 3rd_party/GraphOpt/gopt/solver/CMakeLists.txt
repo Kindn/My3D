@@ -1,9 +1,9 @@
 add_library(${LIB_NAME}_solver SHARED 
     OptSolverBase.h 
     GaussNewtonSolver.cpp GaussNewtonSolver.h
-    GaussNewtonShurSolver.cpp GaussNewtonShurSolver.h
-    GaussNewtonSparseShurSolver.cpp GaussNewtonSparseShurSolver.h
-    LevenbergMarquartSparseShurSolver.cpp LevenbergMarquartSparseShurSolver.h
+    GaussNewtonSchurSolver.cpp GaussNewtonSchurSolver.h
+    GaussNewtonSparseSchurSolver.cpp GaussNewtonSparseSchurSolver.h
+    LevenbergMarquartSparseSchurSolver.cpp LevenbergMarquartSparseSchurSolver.h
 )
 
 target_link_libraries(${LIB_NAME}_solver 
