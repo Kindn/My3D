@@ -9,14 +9,16 @@
 
 namespace gopt {
 
-double HuberLoss::operator () (double input, double *grad, double *grad2) {
-    double output = std::abs(input) <= delta_ ? 
-                        input * input / 2.0 : 
-                        delta_ * (std::abs(input) - delta_ / 2.0);
+double HuberLoss::operator () (double error2, double *grad, double *grad2) {
+    double const error{std::sqrt(std::abs(error2))};
+    double output = std::abs(error2) <= delta2_ ? 
+                        error2 : 
+                        2.0 * delta_ * error - delta2_;
+    double constexpr kEps{1.0e-6};
     if (grad) {
-        *grad = std::abs(input) <= delta_ ? 
-               input : 
-               input / std::abs(input) * delta_;
+        *grad = std::abs(error2) <= delta2_ ? 
+               1.0 : 
+               delta_ / (error + kEps);
     }
     
     return output;

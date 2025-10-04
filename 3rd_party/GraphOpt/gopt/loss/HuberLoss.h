@@ -18,7 +18,7 @@ struct HuberLoss : public LossFunctionBase, public std::enable_shared_from_this<
 public: 
     HuberLoss(double delta = 1.) : 
     LossFunctionBase(), 
-    delta_(delta) {
+    delta_(delta), delta2_{delta * delta} {
         assert(delta_ > std::numeric_limits<double>::epsilon() && 
                "\\delta should be > 0. ");
     }
@@ -38,7 +38,8 @@ public:
     virtual double operator () (double input, double *grad, double *grad2) override;
 
 protected:
-    double delta_;
+    double delta_{1.0};
+    double delta2_{1.0};
 };
 
 } // namespace gopt

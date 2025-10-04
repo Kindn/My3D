@@ -65,7 +65,7 @@ int LevenbergMarquartSparseSchurSolver::solve(Eigen::VectorXd &delta, double &co
         edge->computeJacobians();
         double error2 = edge->computeError2();
         if (edge->loss_ != nullptr) {
-            error2 = edge->loss_->operator()(std::sqrt(error2), &loss_grad, &loss_grad2);
+            error2 = edge->loss_->operator()(error2, &loss_grad, &loss_grad2);
         }
         cost += error2;
         residual.segment(block_id, edge->dimension()) = edge->getResidual();

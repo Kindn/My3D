@@ -18,7 +18,9 @@ int GaussNewtonSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::Vector
     
     // Compute Jacobian
     Eigen::MatrixXd jacobian(dim_res, dim_var);
+    Eigen::MatrixXd rho_jacobian(dim_res, dim_var);
     jacobian.setZero();
+    rho_jacobian.setZero();
     residual.resize(dim_res);
     cost = 0.0;
     FactorGraph::EdgeSet edges = graph_->getEdges();
@@ -30,15 +32,17 @@ int GaussNewtonSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::Vector
         double loss_grad = 1.0, loss_grad2 = 0.0;
         edge->computeResidual();
         edge->computeJacobians();
-        double error = edge->computeError2();
+        double error2 = edge->computeError2();
         if (edge->loss_ != nullptr) {
-            error = edge->loss_->operator()(error, &loss_grad, &loss_grad2);
+            error2 = edge->loss_->operator()(error2, &loss_grad, &loss_grad2);
         }
-        cost += error;
+        cost += error2;
         residual.segment(block_id, edge->dimension()) = edge->getResidual();
         for (size_t i = 0; i < edge->vertices_.size(); ++i) {
             if (!edge->vertices_[i]->isSetFixed()) {
                 jacobian.block(block_id, edge->vertices_[i]->getBlockId(), 
+                           edge->dimension(), edge->vertices_[i]->localDimension()) += info * edge->getJacobian(i);
+                rho_jacobian.block(block_id, edge->vertices_[i]->getBlockId(), 
                            edge->dimension(), edge->vertices_[i]->localDimension()) += loss_grad * info * edge->getJacobian(i);
             }
         }
@@ -46,8 +50,8 @@ int GaussNewtonSolver::solve(Eigen::VectorXd &delta, double &cost, Eigen::Vector
     
     // Compute H and b
     std::cout << jacobian.rows() << " " << jacobian.cols() << std::endl;
-    Eigen::MatrixXd H = jacobian.transpose() * jacobian;
-    Eigen::MatrixXd b = -jacobian.transpose() * residual;
+    Eigen::MatrixXd H = jacobian.transpose() * rho_jacobian;
+    Eigen::MatrixXd b = -rho_jacobian.transpose() * residual;
 
     // Solve H * delta = b
     delta = H.ldlt().solve(b);
