@@ -34,6 +34,138 @@
 #include "sfm/SceneBuilder.h"
 #include "utils/math.h"
 
+namespace gopt {
+
+struct CameraPose {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  Eigen::Quaterniond rotation{Eigen::Quaterniond::Identity()};
+  Eigen::Vector3d translation{Eigen::Vector3d::Zero()};
+
+  CameraPose() = default;
+  CameraPose(Eigen::Quaterniond const &rot, Eigen::Vector3d const &trans)
+      : rotation{rot}, translation{trans} {}
+};
+
+struct VertexCameraPose : public BaseVertex<6UL, CameraPose> {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  VertexCameraPose(){};
+  VertexCameraPose(CameraPose const &camera_pose) {
+    this->setEstimate(camera_pose);
+  }
+
+  void setToOrigin() override;
+
+  void plus(Eigen::VectorXd const &update) override;
+
+  size_t frame_idx{0UL};
+  bool fix_rot{false};
+  bool fix_trans{false};
+};
+
+struct VertexTrackInvDepth : public BaseVertex<1UL, double> {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  VertexTrackInvDepth() { this->setEstimate(1.0); };
+  VertexTrackInvDepth(double const inv_depth, size_t const tid,
+                      size_t const sf_idx)
+      : track_id{tid}, start_frame_idx{sf_idx} {
+    this->setEstimate(inv_depth);
+  }
+
+  void setToOrigin() override;
+
+  void plus(Eigen::VectorXd const &update) override;
+
+  size_t getTrackId() const { return track_id; }
+
+  size_t getStartFrameIdx() const { return start_frame_idx; }
+
+  bool is_fixed{false};
+
+protected:
+  size_t track_id{0UL};
+  size_t start_frame_idx{0UL};
+};
+
+struct EdgeProjectionMeasurement {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  Eigen::Vector3d sphere0{Eigen::Vector3d::UnitX()};
+  Eigen::Vector3d sphere1{Eigen::Vector3d::UnitX()};
+};
+
+struct EdgeProjection : public BaseEdge<2UL, EdgeProjectionMeasurement> {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  EdgeProjection() { tangent_base.setIdentity(); }
+
+  EdgeProjection(size_t const id, size_t const track_id, size_t const fidx0,
+                 size_t const fidx1,
+                 FactorGraph::VertexPtr const &vertex_camera_pose_0,
+                 FactorGraph::VertexPtr const &vertex_camera_pose_1,
+                 FactorGraph::VertexPtr const &vertex_inv_depth,
+                 EdgeProjectionMeasurement const &measurement,
+                 Eigen::Matrix2d const &information,
+                 std::shared_ptr<gopt::LossFunctionBase> const &loss)
+      : track_id{track_id}, frame_idx_0{fidx0}, frame_idx_1{fidx1} {
+    vertices_.resize(3UL);
+    jacobians_.resize(3UL);
+    residual_.resize(2L);
+    this->setId(id);
+    this->setVertex(0UL, vertex_camera_pose_0);
+    this->setVertex(1UL, vertex_camera_pose_1);
+    this->setVertex(2UL, vertex_inv_depth);
+    this->setMeasurement(measurement);
+    this->setInformation(information);
+    this->setLossFunction(loss);
+  }
+
+  void setMeasurement(EdgeProjectionMeasurement const &measurement) override {
+    BaseEdge<2UL, EdgeProjectionMeasurement>::setMeasurement(measurement);
+    setTangentBase(measurement);
+  }
+
+  void computeResidual() override;
+
+  void computeJacobians() override;
+
+  void setTangentBase(EdgeProjectionMeasurement const &measurement);
+
+  bool enable_fej_{false};
+
+  size_t getFrameIdx0() const { return frame_idx_0; }
+
+  size_t getFrameIdx1() const { return frame_idx_1; }
+
+  size_t getTrackId() const { return track_id; }
+
+protected:
+  Eigen::Matrix<double, 3, 2> tangent_base{};
+  size_t track_id{0UL};
+  size_t frame_idx_0{0UL};
+  size_t frame_idx_1{0UL};
+};
+
+struct EdgeMarginPrior : public gopt::FactorGraph::Edge {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  EdgeMarginPrior(size_t const id, Eigen::MatrixXd const &lj,
+                  Eigen::VectorXd const &lr,
+                  std::vector<gopt::FactorGraph::VertexPtr> const &lp,
+                  std::vector<gopt::FactorGraph::VertexPtr> const &vs);
+
+  void computeResidual() override;
+
+  void computeJacobians() override;
+
+protected:
+  std::vector<gopt::FactorGraph::VertexPtr> linearized_point{};
+  Eigen::MatrixXd linearized_jacobian{};
+  Eigen::VectorXd linearized_residual{};
+};
+
+} // namespace gopt
+
 namespace my3d {
 namespace slam {
 namespace simple_vo {
@@ -59,6 +191,7 @@ struct Track {
   Eigen::Vector3d position{};
   EigenVec<Observation> observations{};
   bool is_triangulated{false};
+  bool is_optimized{false};
   bool valid{false};
 };
 
@@ -113,7 +246,7 @@ public:
     double max_abs_pose_reproj_error{12.0};
     double max_valid_track_avg_proj_error_deg{0.5};
     double min_frame_rel_trans{3.0};
-    double min_avg_parallax_keyframe_deg{0.3};
+    double min_avg_parallax_keyframe_deg{0.1};
     size_t max_num_covis_keyframe{30UL};
     double dist_init_pair{1.0};
 
@@ -127,6 +260,7 @@ public:
   };
 
   struct AbsPoseEstReport {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     bool success{false};
     Eigen::Quaterniond rotation{Eigen::Quaterniond::Identity()};
     Eigen::Vector3d translation{Eigen::Vector3d::Zero()};
@@ -135,6 +269,7 @@ public:
   };
 
   struct RegistReport {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     bool success{false};
     size_t frame_id{0UL};
     Eigen::Quaterniond rotation{Eigen::Quaterniond::Identity()};
@@ -143,11 +278,13 @@ public:
   };
 
   struct LastFrameInfo {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     std::shared_ptr<base::Image> last_image{};
     double last_timestamp{0.0};
     EigenUMap<size_t, FeatureTracker::InputPoint> last_pts{};
     Eigen::Quaterniond last_tracking_rotation{Eigen::Quaterniond::Identity()};
     Eigen::Vector3d last_tracking_translation{Eigen::Vector3d::Zero()};
+    bool is_keyframe{false};
 
     Eigen::Matrix3x4d getPose() const {
       return base::composePose(last_tracking_rotation.toRotationMatrix(),
@@ -160,6 +297,27 @@ public:
           -last_tracking_rotation.inverse().toRotationMatrix() *
               last_tracking_translation);
     }
+  };
+
+  struct OptInfo {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EigenUMap<size_t, std::shared_ptr<gopt::VertexCameraPose>> vertices_frame{};
+    EigenUMap<size_t, std::shared_ptr<gopt::VertexTrackInvDepth>>
+        vertices_track{};
+    EigenVec<std::shared_ptr<gopt::EdgeProjection>> edges_proj{};
+    EigenVec<std::shared_ptr<gopt::EdgeMarginPrior>> edge_margin{};
+  };
+
+  struct MarginInfo {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    bool valid{false};
+    std::vector<size_t> margined_frame_ids{};
+    std::vector<size_t> margined_track_ids{};
+    std::vector<size_t> keeped_frame_ids{};
+    std::vector<size_t> keeped_track_ids{};
+    Eigen::MatrixXd linearized_jacobian{};
+    Eigen::VectorXd linearized_residual{};
+    std::vector<gopt::FactorGraph::VertexPtr> linearized_point{};
   };
 
   explicit Estimator(Config const &config) noexcept;
@@ -237,7 +395,12 @@ private:
 
   void filterTracks() noexcept;
 
-  void marginalize(MarginType const &margin_type) noexcept;
+  void
+  marginalize(MarginType const &margin_type,
+              std::unordered_set<size_t> const &margined_frame_ids,
+              std::unordered_set<size_t> const &margined_track_ids,
+              std::unordered_set<size_t> const &deleted_frame_ids,
+              std::unordered_set<size_t> const &deleted_track_ids) noexcept;
 
   void slideWindow(MarginType const margin_type) noexcept;
 
@@ -281,103 +444,12 @@ private:
   bool is_ref_frame_selected_{false};
   FeatureTracker::Result tracked_pts_{};
   LastFrameInfo last_frame_info_{};
+  OptInfo opt_info_{};
+  std::shared_ptr<MarginInfo> margin_info_{nullptr};
 };
 
 } // namespace simple_vo
 } // namespace slam
 } // namespace my3d
-
-namespace gopt {
-
-struct CameraPose {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  Eigen::Quaterniond rotation{Eigen::Quaterniond::Identity()};
-  Eigen::Vector3d translation{Eigen::Vector3d::Zero()};
-
-  CameraPose() = default;
-  CameraPose(Eigen::Quaterniond const &rot, Eigen::Vector3d const &trans)
-      : rotation{rot}, translation{trans} {}
-};
-
-struct VertexCameraPose : public BaseVertex<6UL, CameraPose> {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-  VertexCameraPose(){};
-  VertexCameraPose(CameraPose const &camera_pose) {
-    this->setEstimate(camera_pose);
-  }
-
-  void setToOrigin() override;
-
-  void plus(Eigen::VectorXd const &update) override;
-
-  size_t frame_idx{0UL};
-  bool fix_rot{false};
-  bool fix_trans{false};
-};
-
-struct VertexTrackInvDepth : public BaseVertex<1UL, double> {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-  VertexTrackInvDepth(){};
-  VertexTrackInvDepth(double const inv_depth) { this->setEstimate(inv_depth); }
-
-  void setToOrigin() override;
-
-  void plus(Eigen::VectorXd const &update) override;
-
-  bool is_fixed{false};
-};
-
-struct EdgeProjectionMeasurement {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  Eigen::Vector3d sphere0{Eigen::Vector3d::UnitX()};
-  Eigen::Vector3d sphere1{Eigen::Vector3d::UnitX()};
-};
-
-struct EdgeProjection : public BaseEdge<2UL, EdgeProjectionMeasurement> {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-  EdgeProjection() { tangent_base.setIdentity(); }
-
-  EdgeProjection(size_t const id,
-                 FactorGraph::VertexPtr const &vertex_camera_pose_0,
-                 FactorGraph::VertexPtr const &vertex_camera_pose_1,
-                 FactorGraph::VertexPtr const &vertex_inv_depth,
-                 EdgeProjectionMeasurement const &measurement,
-                 Eigen::Matrix2d const &information,
-                 std::shared_ptr<gopt::LossFunctionBase> const &loss) {
-    vertices_.resize(3UL);
-    jacobians_.resize(3UL);
-    residual_.resize(2L);
-    this->setId(id);
-    this->setVertex(0UL, vertex_camera_pose_0);
-    this->setVertex(1UL, vertex_camera_pose_1);
-    this->setVertex(2UL, vertex_inv_depth);
-    this->setMeasurement(measurement);
-    this->setInformation(information);
-    this->setLossFunction(loss);
-  }
-
-  void setMeasurement(EdgeProjectionMeasurement const &measurement) override {
-    BaseEdge<2UL, EdgeProjectionMeasurement>::setMeasurement(measurement);
-    setTangentBase(measurement);
-  }
-
-  void computeResidual() override;
-
-  // void computeJacobians() override;
-
-  void setTangentBase(EdgeProjectionMeasurement const &measurement);
-
-  bool enable_feg_{false};
-
-protected:
-  Eigen::Matrix<double, 3, 2> tangent_base{};
-};
-
-// TODO Implement marginalization prior edge
-
-} // namespace gopt
 
 #endif // _MY3D_SLAM_SIMPLE_VO_ESTIMATOR_H_

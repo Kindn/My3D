@@ -131,6 +131,8 @@ void EstimatorVisualizer::getVizData() {
     viz_camera.color = getCameraColor(frame.id, i);
     viz_data_.sliding_window.push_back(viz_camera);
   }
+  std::cout << "[INFO][viz] Got " << viz_data_.sliding_window.size()
+            << " keyframes to be displayed. " << std::endl;
 
   {
     cv::Mat R(3, 3, CV_32FC1, cv::Scalar(0));
@@ -138,8 +140,7 @@ void EstimatorVisualizer::getVizData() {
     for (int i = 0; i < 3; ++i) {
       for (int j = 0; j < 3; ++j) {
         R.at<float>(i, j) = static_cast<float>(
-            estimator_->tracking_rotation_.toRotationMatrix().operator()(
-                i, j));
+            estimator_->tracking_rotation_.toRotationMatrix().operator()(i, j));
       }
       t.at<float>(i, 0) =
           static_cast<float>(estimator_->tracking_translation_(i));
@@ -161,6 +162,8 @@ void EstimatorVisualizer::getVizData() {
     viz_point_3D.color = getPoint3DColor(track_id);
     viz_data_.point_cloud.push_back(viz_point_3D);
   }
+  std::cout << "[INFO][viz] Got " << viz_data_.point_cloud.size()
+            << " points to be displayed. " << std::endl;
 }
 
 cv::Vec3b EstimatorVisualizer::getCameraColor(const size_t &id,
@@ -177,7 +180,9 @@ cv::Vec3b EstimatorVisualizer::getCameraColor(const size_t &id,
 cv::Vec3b EstimatorVisualizer::getPoint3DColor(const size_t &track_id) const {
   if (estimator_->tracks_.find(track_id) != estimator_->tracks_.end()) {
     auto const &track{estimator_->tracks_.at(track_id)};
-    if (!track->valid) {
+    if (!track->valid || !track->is_triangulated || !track->is_optimized) {
+      // std::cout << track->valid << " " << track->is_triangulated << " "
+      //           << track->is_optimized << std::endl;
       return {255, 0, 0};
     } else {
       double const a{static_cast<double>(track->observations.size()) /

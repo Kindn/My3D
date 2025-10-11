@@ -23,12 +23,12 @@ FeatureTracker::track(std::shared_ptr<base::Image> const &src,
   size_t const num_pts{pts.size()};
 
   Result result{};
-  if (num_pts == 0UL) {
-    result.tracked_pts.clear();
-    result.tracked_add_pts.clear();
-    result.success = true;
-    return result;
-  }
+  // if (num_pts == 0UL) {
+  //   result.tracked_pts.clear();
+  //   result.tracked_add_pts.clear();
+  //   result.success = true;
+  //   return result;
+  // }
 
   result.success = false;
 
@@ -48,36 +48,38 @@ FeatureTracker::track(std::shared_ptr<base::Image> const &src,
   double constexpr kDtEps{1.0e-8};
 
   //* Step 1: Track existing points
-  std::vector<size_t> ids{};
-  EigenVec<Eigen::Vector2d> pts_vec{};
-  EigenVec<Eigen::Vector2d> tracked_pts_vec{};
-  ids.reserve(num_pts);
-  pts_vec.reserve(num_pts);
-  for (auto const &pt : pts) {
-    ids.emplace_back(pt.first);
-    pts_vec.emplace_back(pt.second.pos);
-  }
-  std::vector<uint8_t> status{};
-  std::vector<float> errors{};
-  trackLK(src, tgt, pts_vec, tracked_pts_vec, status, errors);
-  result.tracked_pts.clear();
-  result.tracked_pts.reserve(num_pts);
-  for (size_t i{0UL}; i < num_pts; ++i) {
-    TrackedPoint tracked_pt{};
-    tracked_pt.point_id = ids[i];
-    tracked_pt.pixel_coord_src = pts.at(ids[i]).pos;
-    tracked_pt.pixel_coord = tracked_pts_vec[i];
-    tracked_pt.sphere_coord =
-        config_.camera->pix2Sphere(tracked_pt.pixel_coord);
-    if (dt > kDtEps) {
-      tracked_pt.pixel_vel =
-          (tracked_pt.pixel_coord - tracked_pt.pixel_coord_src) / dt;
-    } else {
-      tracked_pt.pixel_vel.setZero();
+  if (num_pts > 0UL) {
+    std::vector<size_t> ids{};
+    EigenVec<Eigen::Vector2d> pts_vec{};
+    EigenVec<Eigen::Vector2d> tracked_pts_vec{};
+    ids.reserve(num_pts);
+    pts_vec.reserve(num_pts);
+    for (auto const &pt : pts) {
+      ids.emplace_back(pt.first);
+      pts_vec.emplace_back(pt.second.pos);
     }
-    tracked_pt.valid = (status[i] > 0);
-    tracked_pt.lk_error = errors[i];
-    result.tracked_pts.emplace(ids[i], tracked_pt);
+    std::vector<uint8_t> status{};
+    std::vector<float> errors{};
+    trackLK(src, tgt, pts_vec, tracked_pts_vec, status, errors);
+    result.tracked_pts.clear();
+    result.tracked_pts.reserve(num_pts);
+    for (size_t i{0UL}; i < num_pts; ++i) {
+      TrackedPoint tracked_pt{};
+      tracked_pt.point_id = ids[i];
+      tracked_pt.pixel_coord_src = pts.at(ids[i]).pos;
+      tracked_pt.pixel_coord = tracked_pts_vec[i];
+      tracked_pt.sphere_coord =
+          config_.camera->pix2Sphere(tracked_pt.pixel_coord);
+      if (dt > kDtEps) {
+        tracked_pt.pixel_vel =
+            (tracked_pt.pixel_coord - tracked_pt.pixel_coord_src) / dt;
+      } else {
+        tracked_pt.pixel_vel.setZero();
+      }
+      tracked_pt.valid = (status[i] > 0);
+      tracked_pt.lk_error = errors[i];
+      result.tracked_pts.emplace(ids[i], tracked_pt);
+    }
   }
 
   //* Step 2: If the number of existing points is less than max_num_corners,
@@ -189,8 +191,8 @@ void FeatureTracker::trackLK(std::shared_ptr<base::Image> const &src,
     tracked_pts[i].y() = tracked_pts_cv[i].y;
     int32_t const xi{static_cast<int32_t>(std::round(tracked_pts_cv[i].x))};
     int32_t const yi{static_cast<int32_t>(std::round(tracked_pts_cv[i].y))};
-    if (xi < 0 || xi > static_cast<int32_t>(tgt->cols() - 1UL) ||
-        yi < 0 || yi > static_cast<int32_t>(tgt->rows() - 1UL)) {
+    if (xi < 0 || xi > static_cast<int32_t>(tgt->cols() - 1UL) || yi < 0 ||
+        yi > static_cast<int32_t>(tgt->rows() - 1UL)) {
       status[i] = 0;
     }
   }

@@ -126,32 +126,32 @@ void Estimator::feedFrame(std::shared_ptr<base::Image> const &image,
   if (!regist_report_.is_keyframe &&
       sliding_window_.size() <= config_.window_size) {
     // margin_type = MarginType::MARGIN_SECOND_NEWEST;
-    // std::cout << "[ERROR] margin_type: "
+    // std::cout << "[INFO] margin_type: "
     //           << "MARGIN_SECOND_NEWEST" << std::endl;
     margin_type = MarginType::MARGIN_NEWEST;
-    std::cout << "[ERROR] margin_type: "
+    std::cout << "[INFO] margin_type: "
               << "MARGIN_NEWEST" << std::endl;
   } else if (!regist_report_.is_keyframe &&
              sliding_window_.size() > config_.window_size) {
     // margin_type = MarginType::MARGIN_SECOND_NEWEST;
-    // std::cout << "[ERROR] margin_type: "
+    // std::cout << "[INFO] margin_type: "
     //           << "MARGIN_SECOND_NEWEST" << std::endl;
     margin_type = MarginType::MARGIN_NEWEST;
-    std::cout << "[ERROR] margin_type: "
+    std::cout << "[INFO] margin_type: "
               << "MARGIN_NEWEST" << std::endl;
   } else if (sliding_window_.size() > config_.window_size) {
     margin_type = MarginType::MARGIN_OLDEST;
-    std::cout << "[ERROR] margin_type: "
+    std::cout << "[INFO] margin_type: "
               << "MARGIN_OLDEST" << std::endl;
   } else {
-    std::cout << "[ERROR] margin_type: "
+    std::cout << "[INFO] margin_type: "
               << "NONE" << std::endl;
   }
 
-  marginalize(margin_type);
-
   //* Slide window
   slideWindow(margin_type);
+
+  std::cout << "[INFO] num tracks: " << tracks_.size() << std::endl;
 }
 
 void Estimator::drawTrackingResult(cv::Mat &image) const noexcept {
@@ -227,6 +227,7 @@ void Estimator::updateFrameInfo(std::shared_ptr<base::Image> const &image,
       ft_in.track_len = 1UL;
       last_frame_info_.last_pts.emplace(track_id, ft_in);
     }
+    last_frame_info_.is_keyframe = true;
   } else if (init_flag) {
     tracking_rotation_ = sliding_window_.back().rotation;
     tracking_translation_ = sliding_window_.back().translation;
@@ -243,6 +244,7 @@ void Estimator::updateFrameInfo(std::shared_ptr<base::Image> const &image,
       ft_in.track_len = 2UL;
       last_frame_info_.last_pts.emplace(track_id, ft_in);
     }
+    last_frame_info_.is_keyframe = true;
   } else {
     tracking_rotation_ = sliding_window_.back().rotation;
     tracking_translation_ = sliding_window_.back().translation;
@@ -270,6 +272,7 @@ void Estimator::updateFrameInfo(std::shared_ptr<base::Image> const &image,
       tmp_last_pts.emplace(track_id, ft_in);
     }
     last_frame_info_.last_pts = tmp_last_pts;
+    last_frame_info_.is_keyframe = regist_report_.is_keyframe;
   }
 }
 
@@ -620,21 +623,22 @@ void Estimator::optimize() noexcept {
   //* Initialize factor graph
   gopt::OptSolverBase *solver{new gopt::LevenbergMarquartSparseSchurSolver};
   // gopt::OptSolverBase *solver{new gopt::GaussNewtonSparseSchurSolver};
+  // gopt::OptSolverBase *solver{new gopt::GaussNewtonSolver};
   gopt::FactorGraph graph;
   graph.setOptSolver(solver);
   gopt::optimization_config_t config;
-  config.verbose = false;
+  config.verbose = true;
   config.max_iteration_num = 10UL;
   graph.setOptConfig(config);
 
   //* Normalize the translations of all the frames in sliding window
   Eigen::Vector3d norm_t{Eigen::Vector3d::Zero()};
   double norm_s{1.0};
-  normalizeFrameTranslations(norm_t, norm_s);
+  // normalizeFrameTranslations(norm_t, norm_s);
 
   //* Add frame vertices
   size_t vid{0UL};
-  std::vector<std::shared_ptr<gopt::VertexCameraPose>> vertices_frame{};
+  EigenUMap<size_t, std::shared_ptr<gopt::VertexCameraPose>> vertices_frame{};
   vertices_frame.reserve(sliding_window_.size());
   for (size_t i{0UL}; i < window_size; ++i) {
     Frame const &frame{sliding_window_[i]};
@@ -653,35 +657,35 @@ void Estimator::optimize() noexcept {
       v->fix_rot = false;
       v->fix_trans = false;
     }
-    if (!graph.addVertex(v)) {
-      std::cout << "[ERROR] Failed to add frame vertex for frame " << i
-                << " in sliding window. "
-                << "Optimization aborted. " << std::endl;
-      return;
-    }
-    vertices_frame.emplace_back(v);
+    // if (!graph.addVertex(v)) {
+    //   std::cout << "[ERROR] Failed to add frame vertex for frame " << i
+    //             << " in sliding window. "
+    //             << "Optimization aborted. " << std::endl;
+    //   return;
+    // }
+    vertices_frame.emplace(frame.id, v);
     ++vid;
   }
 
   //* Add point vertices
-  std::unordered_map<size_t, std::shared_ptr<gopt::VertexTrackInvDepth>>
+  EigenUMap<size_t, std::shared_ptr<gopt::VertexTrackInvDepth>>
       vertices_track{};
   vertices_track.reserve(config_.feature_tracker_config.max_num_corners);
   double constexpr kMinConsideredTrackDepth{5.0e-2};
   // double constexpr kMaxConsideredTrackDepth{5.0e2};
   for (auto const &[track_id, track] : tracks_) {
     if (!track->valid || !track->is_triangulated) {
-      std::cout << "line " << __LINE__ << std::endl;
+      // std::cout << "line " << __LINE__ << std::endl;
       continue;
     }
 
     if (track->depth < kMinConsideredTrackDepth) {
-      std::cout << "line " << __LINE__ << std::endl;
+      // std::cout << "line " << __LINE__ << std::endl;
       continue;
     }
 
-    if (track->observations.size() < std::min(window_size, 4UL)) {
-      std::cout << "line " << __LINE__ << std::endl;
+    if (track->observations.size() < std::min(window_size, 2UL)) {
+      // std::cout << "line " << __LINE__ << std::endl;
       continue;
     }
 
@@ -690,9 +694,9 @@ void Estimator::optimize() noexcept {
       continue;
     }
 
-    auto v{std::make_shared<gopt::VertexTrackInvDepth>()};
+    auto v{std::make_shared<gopt::VertexTrackInvDepth>(
+        1.0 / (track->depth * norm_s), track_id, track->start_idx)};
     v->setId(vid);
-    v->setEstimate(1.0 / (track->depth * norm_s));
     v->setMarginalized(true);
     // if (!regist_report_.is_keyframe)
     // {
@@ -700,33 +704,28 @@ void Estimator::optimize() noexcept {
     // } else {
     //   v->is_fixed = false;
     // }
-    if (!graph.addVertex(v)) {
-      std::cout << "[ERROR] Failed to add track vertex for track " << track_id
-                << ". "
-                << "Optimization will not be applied. " << std::endl;
-      return;
-    }
+    // if (!graph.addVertex(v)) {
+    //   std::cout << "[ERROR] Failed to add track vertex for track " <<
+    //   track_id
+    //             << ". "
+    //             << "Optimization will not be applied. " << std::endl;
+    //   return;
+    // }
     vertices_track.emplace(track_id, v);
+    track->is_optimized = true;
     ++vid;
   }
-
+  // std::cout << "opt line " << __LINE__ << std::endl;
   //* Add projection edges
-  std::unordered_map<
-      size_t, std::unordered_map<size_t, std::shared_ptr<gopt::EdgeProjection>>>
-      edges{};
+  EigenVec<std::shared_ptr<gopt::EdgeProjection>> edges_proj{};
   size_t eid{0UL};
   for (auto const &[track_id, vertex_track] : vertices_track) {
     auto const &track{tracks_.at(track_id)};
     size_t const start_idx = track->start_idx;
-    auto const &vf0{vertices_frame[start_idx]};
+    auto const &vf0{vertices_frame.at(sliding_window_[start_idx].id)};
     auto const &vt{vertices_track.at(track_id)};
     auto const observations{track->observations};
     Eigen::Vector3d const meas_sphere0{observations.front().sphere_coord};
-    if (edges.find(start_idx) == edges.end()) {
-      edges.emplace(
-          start_idx,
-          std::unordered_map<size_t, std::shared_ptr<gopt::EdgeProjection>>());
-    }
 
     for (size_t i{1UL}; i < observations.size(); ++i) {
       size_t const frame_idx{start_idx + i};
@@ -734,13 +733,13 @@ void Estimator::optimize() noexcept {
         break;
       }
 
-      auto const vf1{vertices_frame[frame_idx]};
+      auto const vf1{vertices_frame.at(sliding_window_[frame_idx].id)};
       auto const meas_sphere1{observations[i].sphere_coord};
       gopt::EdgeProjectionMeasurement const measurement{meas_sphere0,
                                                         meas_sphere1};
       auto const e{std::make_shared<gopt::EdgeProjection>(
-          eid, vf0, vf1, vt, measurement, Eigen::Matrix2d::Identity(),
-          std::make_shared<gopt::HuberLoss>())};
+          eid, track_id, start_idx, frame_idx, vf0, vf1, vt, measurement,
+          Eigen::Matrix2d::Identity(), std::make_shared<gopt::HuberLoss>(0.2))};
       if (!graph.addEdge(e)) {
         std::cout << "[ERROR] Failed to add projection edge ("
                   << "frame0: " << start_idx << ", "
@@ -749,15 +748,44 @@ void Estimator::optimize() noexcept {
                   << "Optimization will not be applied. " << std::endl;
         return;
       }
-      edges.at(start_idx).emplace(frame_idx, e);
+      edges_proj.emplace_back(e);
       ++eid;
     }
   }
   std::cout << "[INFO][opt] Added " << vertices_frame.size() << " frame(s), "
-            << vertices_track.size() << " track(s), " << edges.size()
+            << vertices_track.size() << " track(s), " << edges_proj.size()
             << " residual(s), " << std::endl;
 
-  // TODO Add marginalization edges
+  //* Add marginalization edges
+  EigenVec<std::shared_ptr<gopt::EdgeMarginPrior>> edge_margin{};
+  if (margin_info_ != nullptr && margin_info_->valid) {
+    std::cout << "opt line " << __LINE__ << std::endl;
+    std::vector<gopt::FactorGraph::VertexPtr> vs{};
+    vs.reserve(margin_info_->keeped_frame_ids.size() +
+               margin_info_->keeped_track_ids.size());
+    for (size_t const frame_id : margin_info_->keeped_frame_ids) {
+      if (vertices_frame.find(frame_id) == vertices_frame.end()) {
+        continue;
+      }
+      vs.emplace_back(vertices_frame.at(frame_id));
+    }
+    for (size_t const track_id : margin_info_->keeped_track_ids) {
+      if (vertices_track.find(track_id) == vertices_track.end()) {
+        continue;
+      }
+      vs.emplace_back(vertices_track.at(track_id));
+    }
+    std::cout << "opt line " << __LINE__ << std::endl;
+    auto e{std::make_shared<gopt::EdgeMarginPrior>(
+        eid, margin_info_->linearized_jacobian,
+        margin_info_->linearized_residual, margin_info_->linearized_point, vs)};
+    if (!graph.addEdge(e)) {
+      std::cout << "[ERROR] Failed to add marginalization edge. "
+                << "Optimization will not be applied. " << std::endl;
+      return;
+    }
+    edge_margin.emplace_back(e);
+  }
 
   //* Solve BA
   int32_t const opt_status{graph.optimize()};
@@ -768,10 +796,11 @@ void Estimator::optimize() noexcept {
     return;
   } else {
     //* Update states
-    for (auto const &v : vertices_frame) {
+    for (auto const &[frame_id, v] : vertices_frame) {
       auto const estimate{v->getEstimate()};
       sliding_window_[v->frame_idx].rotation = estimate.rotation;
-      sliding_window_[v->frame_idx].translation = estimate.translation / norm_s - norm_t;
+      sliding_window_[v->frame_idx].translation =
+          estimate.translation / norm_s - norm_t;
     }
     for (auto const &[track_id, v] : vertices_track) {
       double const estimate{v->getEstimate()};
@@ -779,6 +808,22 @@ void Estimator::optimize() noexcept {
       tracks_.at(track_id)->position = getTrackPosition(track_id);
     }
   }
+  opt_info_.vertices_frame.clear();
+  opt_info_.vertices_track.clear();
+  for (auto const &v : graph.getVertices()) {
+    if (typeid(*(v.second)) == typeid(gopt::VertexCameraPose)) {
+      opt_info_.vertices_frame.emplace(
+          v.first, std::dynamic_pointer_cast<gopt::VertexCameraPose>(v.second));
+    } else {
+      opt_info_.vertices_track.emplace(
+          v.first,
+          std::dynamic_pointer_cast<gopt::VertexTrackInvDepth>(v.second));
+    }
+  }
+  // opt_info_.vertices_frame = vertices_frame;
+  // opt_info_.vertices_track = vertices_track;
+  opt_info_.edges_proj = edges_proj;
+  opt_info_.edge_margin = edge_margin;
   std::cout << "[INFO] Optimization succeeded. " << std::endl;
 }
 
@@ -789,6 +834,10 @@ void Estimator::filterTracks() noexcept {
   std::unordered_set<size_t> removed_ids{};
   for (auto const &[track_id, track] : tracks_) {
     if (!track->is_triangulated) {
+      continue;
+    }
+
+    if (!track->is_optimized) {
       continue;
     }
 
@@ -804,6 +853,7 @@ void Estimator::filterTracks() noexcept {
     //* Filter tracks with invalid depth
     double const depth{track->depth};
     if (depth < kMinValidDepth || std::isinf(depth) || std::isnan(depth)) {
+      // std::cout << "depth: " << depth << " ";
       track->valid = false;
       // removed_tracks_.emplace(track_id, track);
       removed_tracks_.insert(std::make_pair(track_id, track));
@@ -814,6 +864,8 @@ void Estimator::filterTracks() noexcept {
     //* Filter tracks with large projection error
     double const avg_proj_error{computeTrackAvgProjAngleError(track_id)};
     if (avg_proj_error > max_valid_track_avg_proj_error) {
+      // std::cout << "avg_proj_error: " << util::rad2Deg(avg_proj_error) << "
+      // ";
       track->valid = false;
       // removed_tracks_.emplace(track_id, track);
       removed_tracks_.insert(std::make_pair(track_id, track));
@@ -821,6 +873,7 @@ void Estimator::filterTracks() noexcept {
       continue;
     }
   }
+  // std::cout << std::endl;
   std::cout << "[INFO] Filtered " << removed_ids.size() << " tracks. "
             << std::endl;
   for (size_t const &id : removed_ids) {
@@ -846,39 +899,331 @@ void Estimator::normalizeFrameTranslations(Eigen::Vector3d &trans,
   return;
 }
 
-void Estimator::marginalize(MarginType const &margin_type) noexcept {
-  // TODO Construct marginalization prior
+void Estimator::marginalize(
+    MarginType const &margin_type,
+    std::unordered_set<size_t> const &margined_frame_ids,
+    std::unordered_set<size_t> const &margined_track_ids,
+    std::unordered_set<size_t> const &deleted_frame_ids,
+    std::unordered_set<size_t> const &deleted_track_ids) noexcept {
+  if (margin_type == MarginType::MARGIN_NEWEST ||
+      margin_type == MarginType::NONE) {
+    // margin_info_ = nullptr;
+    return;
+  }
+
+  struct VertexInfo {
+    size_t block_id{0UL};
+    size_t local_dim{1UL};
+    bool is_margined{false};
+  };
+
+  auto const last_margin_info{margin_info_};
+  margin_info_ = std::make_shared<MarginInfo>();
+  margin_info_->margined_frame_ids.clear();
+  margin_info_->margined_track_ids.clear();
+  margin_info_->keeped_frame_ids.clear();
+  margin_info_->keeped_track_ids.clear();
+  margin_info_->linearized_point.clear();
+
+  std::unordered_map<uintptr_t, VertexInfo> margined_vertex_infos{};
+  std::unordered_map<uintptr_t, VertexInfo> keeped_vertex_infos{};
+  std::unordered_set<uintptr_t> deleted_vertex_addrs{};
+
+  size_t dim_marg{0UL};
+  size_t dim_keep{0UL};
+  for (auto const &[frame_id, v] : opt_info_.vertices_frame) {
+    size_t const local_dim{v->localDimension()};
+    if (margined_frame_ids.find(frame_id) != margined_frame_ids.end()) {
+      margined_vertex_infos.emplace(
+          reinterpret_cast<uintptr_t>(dynamic_cast<void *>(v.get())),
+          VertexInfo({dim_marg, local_dim, true}));
+      margin_info_->margined_frame_ids.emplace_back(frame_id);
+      dim_marg += local_dim;
+    } else if (deleted_frame_ids.find(frame_id) == deleted_frame_ids.end()) {
+      keeped_vertex_infos.emplace(
+          reinterpret_cast<uintptr_t>(dynamic_cast<void *>(v.get())),
+          VertexInfo({dim_keep, local_dim, false}));
+      margin_info_->keeped_frame_ids.emplace_back(frame_id);
+      margin_info_->linearized_point.emplace_back(v);
+      dim_keep += local_dim;
+    } else {
+      deleted_vertex_addrs.emplace(
+          reinterpret_cast<uintptr_t>(dynamic_cast<void *>(v.get())));
+    }
+  }
+  if (margin_type == MarginType::MARGIN_OLDEST) {
+    for (auto const &[track_id, v] : opt_info_.vertices_track) {
+      if (v->getStartFrameIdx() != 0UL) {
+        continue;
+      }
+      size_t const local_dim{v->localDimension()};
+      if (margined_track_ids.find(track_id) != margined_track_ids.end()) {
+        margined_vertex_infos.emplace(
+            reinterpret_cast<uintptr_t>(dynamic_cast<void *>(v.get())),
+            VertexInfo({dim_marg, local_dim, true}));
+        margin_info_->margined_track_ids.emplace_back(track_id);
+        dim_marg += local_dim;
+      } else if (deleted_track_ids.find(track_id) == deleted_track_ids.end()) {
+        keeped_vertex_infos.emplace(
+            reinterpret_cast<uintptr_t>(dynamic_cast<void *>(v.get())),
+            VertexInfo({dim_keep, local_dim, false}));
+        // if (margin_type != MarginType::MARGIN_SECOND_NEWEST) {
+        //   margin_info_->keeped_track_ids.emplace_back(track_id);
+        //   margin_info_->linearized_point.emplace_back(v);
+        // }
+        dim_keep += local_dim;
+      } else {
+        deleted_vertex_addrs.emplace(
+            reinterpret_cast<uintptr_t>(dynamic_cast<void *>(v.get())));
+      }
+    }
+  }
+
+  std::cout << "[INFO] dim_marg: " << dim_marg << ", "
+            << "dim_keep: " << dim_keep << std::endl;
+  if (dim_marg == 0UL) {
+    margin_info_->valid = false;
+    std::cout << "[WARNGING] Unstable tracking. " << std::endl;
+    return;
+  }
+
+  auto get_vertex_info{[&margined_vertex_infos, &keeped_vertex_infos](
+                           uintptr_t const addr) -> VertexInfo {
+    if (margined_vertex_infos.find(addr) != margined_vertex_infos.end()) {
+      return margined_vertex_infos.at(addr);
+    } else {
+      return keeped_vertex_infos.at(addr);
+    }
+  }};
+
+  //* Construct Hessian matrix
+  Eigen::MatrixXd Hrr{Eigen::MatrixXd::Zero(dim_keep, dim_keep)};
+  Eigen::MatrixXd Hmr{Eigen::MatrixXd::Zero(dim_marg, dim_keep)};
+  Eigen::MatrixXd Hmm{Eigen::MatrixXd::Zero(dim_marg, dim_marg)};
+  Eigen::VectorXd br{Eigen::VectorXd::Zero(dim_keep)};
+  Eigen::VectorXd bm{Eigen::VectorXd::Zero(dim_marg)};
+  if (margin_type == MarginType::MARGIN_OLDEST) {
+    for (auto const &edge : opt_info_.edges_proj) {
+      if (edge->getFrameIdx0() != 0UL && edge->getFrameIdx1() != 0UL) {
+        continue;
+      }
+      auto const &vertices{edge->vertices_};
+      size_t const num_vertices{vertices.size()};
+      Eigen::VectorXd const residual{edge->getResidual()};
+      double error2{edge->computeError2()};
+      double loss_grad{1.0};
+      double loss_grad2{0.0};
+      if (edge->loss_ != nullptr) {
+        error2 = edge->loss_->operator()(error2, &loss_grad, &loss_grad2);
+      }
+      auto const info{edge->getInformation()};
+      for (size_t i{0UL}; i < num_vertices; ++i) {
+        auto const vi{vertices[i]};
+        uintptr_t const addr_vi{
+            reinterpret_cast<uintptr_t>(static_cast<void *>(vi.get()))};
+        if (deleted_vertex_addrs.find(addr_vi) != deleted_vertex_addrs.end()) {
+          continue;
+        }
+        auto const jacobian_i{edge->getJacobian(i)};
+        VertexInfo const vi_info{get_vertex_info(addr_vi)};
+        size_t const block_id_i{vi_info.block_id};
+        size_t const local_dim_i{vi_info.local_dim};
+        if (vi_info.is_margined) {
+          Hmm.block(block_id_i, block_id_i, local_dim_i, local_dim_i) +=
+              loss_grad * jacobian_i.transpose() * info * jacobian_i;
+          bm.segment(block_id_i, local_dim_i) +=
+              -loss_grad * jacobian_i.transpose() * info * residual;
+        } else {
+          Hrr.block(block_id_i, block_id_i, local_dim_i, local_dim_i) +=
+              loss_grad * jacobian_i.transpose() * info * jacobian_i;
+          br.segment(block_id_i, local_dim_i) +=
+              -loss_grad * jacobian_i.transpose() * info * residual;
+        }
+        for (size_t j{i + 1UL}; j < num_vertices; ++j) {
+          auto const vj{vertices[j]};
+          uintptr_t const addr_vj{
+              reinterpret_cast<uintptr_t>(static_cast<void *>(vj.get()))};
+          if (deleted_vertex_addrs.find(addr_vj) !=
+              deleted_vertex_addrs.end()) {
+            continue;
+          }
+          auto const jacobian_j{edge->getJacobian(j)};
+          VertexInfo const vj_info{get_vertex_info(addr_vj)};
+          size_t const block_id_j{vj_info.block_id};
+          size_t const local_dim_j{vj_info.local_dim};
+          Eigen::MatrixXd const hij{loss_grad * jacobian_i.transpose() * info *
+                                    jacobian_j};
+          if (vi_info.is_margined && vj_info.is_margined) {
+            Hmm.block(block_id_i, block_id_j, local_dim_i, local_dim_j) += hij;
+            Hmm.block(block_id_j, block_id_i, local_dim_j, local_dim_i) +=
+                hij.transpose();
+          } else if (!vi_info.is_margined && !vj_info.is_margined) {
+            Hrr.block(block_id_i, block_id_j, local_dim_i, local_dim_j) += hij;
+            Hrr.block(block_id_j, block_id_i, local_dim_j, local_dim_i) +=
+                hij.transpose();
+          } else if (vi_info.is_margined && !vj_info.is_margined) {
+            Hmr.block(block_id_i, block_id_j, local_dim_i, local_dim_j) += hij;
+          } else {
+            Hmr.block(block_id_j, block_id_i, local_dim_j, local_dim_i) +=
+                hij.transpose();
+          }
+        }
+      }
+    }
+  }
+
+  for (auto const &edge : opt_info_.edge_margin) {
+    auto const &vertices{edge->vertices_};
+    size_t const num_vertices{vertices.size()};
+    Eigen::VectorXd const residual{edge->getResidual()};
+    double error2{edge->computeError2()};
+    double loss_grad{1.0};
+    double loss_grad2{0.0};
+    if (edge->loss_ != nullptr) {
+      error2 = edge->loss_->operator()(error2, &loss_grad, &loss_grad2);
+    }
+    auto const info{edge->getInformation()};
+    for (size_t i{0UL}; i < num_vertices; ++i) {
+      auto const vi{vertices[i]};
+      uintptr_t const addr_vi{
+          reinterpret_cast<uintptr_t>(static_cast<void *>(vi.get()))};
+      if (deleted_vertex_addrs.find(addr_vi) != deleted_vertex_addrs.end()) {
+        continue;
+      }
+      auto const jacobian_i{edge->getJacobian(i)};
+      VertexInfo const vi_info{get_vertex_info(addr_vi)};
+      size_t const block_id_i{vi_info.block_id};
+      size_t const local_dim_i{vi_info.local_dim};
+      if (vi_info.is_margined) {
+        Hmm.block(block_id_i, block_id_i, local_dim_i, local_dim_i) +=
+            loss_grad * jacobian_i.transpose() * info * jacobian_i;
+        bm.segment(block_id_i, local_dim_i) +=
+            -loss_grad * jacobian_i.transpose() * info * residual;
+      } else {
+        Hrr.block(block_id_i, block_id_i, local_dim_i, local_dim_i) +=
+            loss_grad * jacobian_i.transpose() * info * jacobian_i;
+        br.segment(block_id_i, local_dim_i) +=
+            -loss_grad * jacobian_i.transpose() * info * residual;
+      }
+      for (size_t j{i + 1UL}; j < num_vertices; ++j) {
+        auto const vj{vertices[j]};
+        uintptr_t const addr_vj{
+            reinterpret_cast<uintptr_t>(static_cast<void *>(vj.get()))};
+        if (deleted_vertex_addrs.find(addr_vj) != deleted_vertex_addrs.end()) {
+          continue;
+        }
+        auto const jacobian_j{edge->getJacobian(j)};
+        VertexInfo const vj_info{get_vertex_info(addr_vj)};
+        size_t const block_id_j{vj_info.block_id};
+        size_t const local_dim_j{vj_info.local_dim};
+        Eigen::MatrixXd const hij{loss_grad * jacobian_i.transpose() * info *
+                                  jacobian_j};
+        if (vi_info.is_margined && vj_info.is_margined) {
+          Hmm.block(block_id_i, block_id_j, local_dim_i, local_dim_j) += hij;
+          Hmm.block(block_id_j, block_id_i, local_dim_j, local_dim_i) +=
+              hij.transpose();
+        } else if (!vi_info.is_margined && !vj_info.is_margined) {
+          Hrr.block(block_id_i, block_id_j, local_dim_i, local_dim_j) += hij;
+          Hrr.block(block_id_j, block_id_i, local_dim_j, local_dim_i) +=
+              hij.transpose();
+        } else if (vi_info.is_margined && !vj_info.is_margined) {
+          Hmr.block(block_id_i, block_id_j, local_dim_i, local_dim_j) += hij;
+        } else {
+          Hmr.block(block_id_j, block_id_i, local_dim_j, local_dim_i) +=
+              hij.transpose();
+        }
+      }
+    }
+  }
+
+  //* Compute linearized Jacobian and residual using Schur complement
+  Hmm = 0.5 * (Hmm + Hmm.transpose());
+  Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigen_solver_Hmm(Hmm);
+  Eigen::VectorXd const evs_Hmm{eigen_solver_Hmm.eigenvalues()};
+  // std::cout << "Hmm.norm: " << Hmm.norm() << std::endl;
+  // std::cout << "evs_Hmm: [" << evs_Hmm.transpose() << "]" << std::endl;
+  Eigen::VectorXd const inv_evs_Hmm{
+      (evs_Hmm.array() > 0.0).select(evs_Hmm.cwiseInverse(), 0.0)};
+  // std::cout << "[" << (evs_Hmm.cwiseProduct(inv_evs_Hmm)).transpose() << "] "
+            // << std::endl;
+  Eigen::MatrixXd const inv_Hmm{eigen_solver_Hmm.eigenvectors() *
+                                inv_evs_Hmm.asDiagonal() *
+                                eigen_solver_Hmm.eigenvectors().transpose()};
+  // std::cout << "[" << Hmm * inv_Hmm << "]" << std::endl;
+  Eigen::MatrixXd Hr_schur{Hrr - Hmr.transpose() * inv_Hmm * Hmr};
+  // std::cout << "Hrr:\n[" << Hrr << "]" << std::endl;
+  // std::cout << "Hr_schur:\n[" << Hr_schur << "]" << std::endl;
+  Eigen::VectorXd const br_schur{br - Hmr.transpose() * inv_Hmm * bm};
+  Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigen_solver(Hr_schur);
+  Eigen::VectorXd const evs{eigen_solver.eigenvalues()};
+  // std::cout << "evs: [" << evs.transpose() << "]" << std::endl;
+  Eigen::MatrixXd const sqrt_evs{
+      (evs.array() > 0.0).select(evs, 0.0).cwiseSqrt().asDiagonal()};
+  Eigen::MatrixXd const inv_sqrt_evs{(evs.array() > 0.0)
+                                         .select(evs.cwiseInverse(), 0.0)
+                                         .cwiseSqrt()
+                                         .asDiagonal()};
+  // std::cout << ((sqrt_evs * inv_sqrt_evs) -
+  // Eigen::MatrixXd::Identity(Hr_schur.rows(), Hr_schur.cols())).norm() <<
+  // std::endl;
+  std::cout << (sqrt_evs * inv_sqrt_evs).diagonal().transpose() << std::endl;
+  Eigen::MatrixXd const sqrt_Hr_schur{sqrt_evs *
+                                      eigen_solver.eigenvectors().transpose()};
+  Eigen::MatrixXd const inv_sqrt_Hr_schur{eigen_solver.eigenvectors() *
+                                          inv_sqrt_evs};
+  margin_info_->linearized_jacobian = sqrt_Hr_schur;
+  margin_info_->linearized_residual = inv_sqrt_Hr_schur * br_schur;
+  // std::cout << margin_info_->linearized_jacobian.norm() << std::endl;
 }
 
 void Estimator::slideWindow(MarginType const margin_type) noexcept {
   size_t const window_size{sliding_window_.size()};
   if (margin_type == MarginType::NONE) {
+    margin_info_ = nullptr;
     return;
   }
 
   std::unordered_set<size_t> stored_ids{};
   std::unordered_set<size_t> removed_ids{};
+  std::unordered_set<size_t> margined_frame_ids{};
+  std::unordered_set<size_t> margined_track_ids{};
+  std::unordered_set<size_t> deleted_frame_ids{};
+  std::unordered_set<size_t> deleted_track_ids{};
   if (margin_type == MarginType::MARGIN_OLDEST) {
+    margined_frame_ids.emplace(sliding_window_.front().id);
     sliding_window_.erase(sliding_window_.begin());
     for (auto const &[track_id, track] : tracks_) {
       if (!track->valid) {
+        std::cout << "slide window line " << __LINE__ << std::endl;
         removed_tracks_.emplace(track_id, track);
         removed_ids.emplace(track_id);
+        deleted_track_ids.emplace(track_id);
         continue;
       }
       if (track->start_idx == 0UL) {
+        std::cout << "slide window line " << __LINE__ << std::endl;
+        // if (track->observations.size() <= 2UL) {
+          track->valid = false;
+          removed_tracks_.emplace(track_id, track);
+          removed_ids.emplace(track_id);
+          margined_track_ids.emplace(track_id);
+          // deleted_track_ids.emplace(track_id);
+          continue;
+        // }
+
         track->observations.erase(track->observations.begin());
       } else if (track->start_idx > 0UL) {
         --track->start_idx;
       }
-      if (track->observations.size() < 2UL) {
-        stored_tracks_.emplace(track_id, track);
-        stored_ids.emplace(track_id);
-        continue;
-      }
+      // if (track->observations.size() < 2UL) {
+      //   stored_tracks_.emplace(track_id, track);
+      //   stored_ids.emplace(track_id);
+      //   continue;
+      // }
     }
   } else if (margin_type == MarginType::MARGIN_SECOND_NEWEST) {
     Frame const frame{sliding_window_[window_size - 2UL]};
+    margined_frame_ids.emplace(frame.id);
     sliding_window_.erase(sliding_window_.end() - 2);
     for (auto const &[track_id, obs] : frame.features) {
       if (tracks_.find(track_id) == tracks_.end()) {
@@ -886,12 +1231,17 @@ void Estimator::slideWindow(MarginType const margin_type) noexcept {
       }
       auto const &track{tracks_.at(track_id)};
       if (!track->valid) {
+        removed_tracks_.emplace(track_id, track);
+        removed_ids.emplace(track_id);
+        deleted_track_ids.emplace(track_id);
         continue;
       }
       if (track->start_idx >= window_size - 1UL) {
         --track->start_idx;
         removed_tracks_.emplace(track_id, track);
         removed_ids.emplace(track_id);
+        deleted_track_ids.emplace(track_id);
+        track->valid = false;
         continue;
       }
       size_t const obs_idx{window_size - 2UL - track->start_idx};
@@ -901,11 +1251,14 @@ void Estimator::slideWindow(MarginType const margin_type) noexcept {
       if (obs_idx == 0UL) {
         removed_tracks_.emplace(track_id, track);
         removed_ids.emplace(track_id);
+        deleted_track_ids.emplace(track_id);
+        track->valid = false;
         continue;
       }
     }
   } else if (margin_type == MarginType::MARGIN_NEWEST) {
     Frame const frame{sliding_window_[window_size - 1UL]};
+    deleted_frame_ids.emplace(frame.id);
     sliding_window_.erase(sliding_window_.end() - 1);
     for (auto const &[track_id, obs] : frame.features) {
       if (tracks_.find(track_id) == tracks_.end()) {
@@ -913,11 +1266,16 @@ void Estimator::slideWindow(MarginType const margin_type) noexcept {
       }
       auto const &track{tracks_.at(track_id)};
       if (!track->valid) {
-        continue;
-      }
-      if (track->start_idx >= window_size - 2UL) {
         removed_tracks_.emplace(track_id, track);
         removed_ids.emplace(track_id);
+        deleted_track_ids.emplace(track_id);
+        continue;
+      }
+      if (track->start_idx >= window_size - 1UL) {
+        removed_tracks_.emplace(track_id, track);
+        removed_ids.emplace(track_id);
+        deleted_track_ids.emplace(track_id);
+        track->valid = false;
         continue;
       }
       size_t const obs_idx{window_size - 1UL - track->start_idx};
@@ -926,12 +1284,18 @@ void Estimator::slideWindow(MarginType const margin_type) noexcept {
       }
     }
   }
+  //* Generate marginalization info
+  marginalize(margin_type, margined_frame_ids, margined_track_ids,
+              deleted_frame_ids, deleted_track_ids);
+  //* Remove marginalized tracks
   for (size_t const &id : stored_ids) {
     tracks_.erase(id);
   }
   for (size_t const &id : removed_ids) {
     tracks_.erase(id);
   }
+  std::cout << "[INFO] Removed " << removed_ids.size() << " tracks. "
+            << "Stored " << stored_ids.size() << " tracks. " << std::endl;
 }
 
 Estimator::RegistReport
@@ -943,7 +1307,7 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
           estimator::AP3PPoseEstimator::kMinNumSamples ||
       tracked_pts.tracked_pts.size() <
           estimator::EPnPPoseEstimator::kMinNumSamples) {
-    std::cout << "Two few tracked points for absolute pose estimation. "
+    std::cout << "Too few tracked points for absolute pose estimation. "
               << std::endl;
     report.success = false;
     return report;
@@ -958,23 +1322,22 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
       continue;
     }
     if (!tracked_pt.valid) {
+      // std::cout << "regist line " << __LINE__ << std::endl;
       continue;
     }
     if (tracks_.find(track_id) == tracks_.end()) {
-      // std::cout << "bbb ";
-      // if (removed_tracks_.find(track_id) != removed_tracks_.end()) {
-      //   std::cout << "1 ";
-      // }
-      // if (stored_tracks_.find(track_id) != stored_tracks_.end()) {
-      //   std::cout << "2 ";
-      // }
-      // std::cout << std::endl;
+      // std::cout << "regist line " << __LINE__ << std::endl;
       continue;
     }
     auto const &track{tracks_.at(track_id)};
-    if (!track->valid || !track->is_triangulated) {
+    if (!track->valid || !track->is_triangulated || !track->is_optimized) {
+      // std::cout << "regist line " << __LINE__ << std::endl;
       continue;
     }
+    // if (!track->valid || !track->is_triangulated) {
+    //   // std::cout << "regist line " << __LINE__ << std::endl;
+    //   continue;
+    // }
 
     // TODO Support wide-angle camera by using sphere observation
     track_ids.emplace(track_id, pts_2d.size());
@@ -996,7 +1359,7 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
   std::cout << "[INFO] Got " << pts_2d.size()
             << " 3D-2D correspondences for abs pose estimation. " << std::endl;
 
-  //* Estimator absolute pose using PnP
+  //* Estimate absolute pose using PnP
   // auto const abs_pose_report{estimateAbsPoseRANSACPnP(pts_3d, pts_2d)};
   auto const abs_pose_report{estimateAbsPoseIterativePnP(
       pts_3d, pts_2d, sliding_window_.back().rotation,
@@ -1024,6 +1387,7 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
   frame.rotation = abs_pose_report.rotation;
   frame.translation = abs_pose_report.translation;
   frame.features.clear();
+  size_t updated_cnt{0UL};
   for (auto const &[track_id, track] : tracks_) {
     if (track_ids.find(track_id) == track_ids.end()) {
       continue;
@@ -1039,42 +1403,50 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
       // // Delete the interrupted track
       // track->valid = false;
     }
+    ++updated_cnt;
   }
   // Add new tracks
-  Eigen::Matrix3x4d const proj0{last_frame_info_.getProjectionMatrix()};
-  Eigen::Matrix3x4d const proj1{frame.getProjectionMatrix()};
-  double const kZEps{3.0e-2};
-  for (auto const &pt : tracked_pts.tracked_add_pts) {
-    if (!pt.valid) {
-      continue;
-    }
+  size_t added_cnt{0UL};
+  if (last_frame_info_.is_keyframe) {
+    Eigen::Matrix3x4d const proj0{last_frame_info_.getProjectionMatrix()};
+    Eigen::Matrix3x4d const proj1{frame.getProjectionMatrix()};
+    double const kZEps{3.0e-2};
+    for (auto const &pt : tracked_pts.tracked_add_pts) {
+      if (!pt.valid) {
+        continue;
+      }
 
-    size_t const track_id{track_cnt_++};
-    //* Try to triangulate the two observation
-    Eigen::Vector2d const pn0{camera->pix2Norm(pt.pixel_coord_src)};
-    Eigen::Vector2d const pn1{camera->pix2Norm(pt.pixel_coord)};
-    Eigen::Vector3d const pw{base::triangulatePoint(proj0, proj1, pn0, pn1)};
-    Eigen::Vector3d const pc0{proj0 * pw.homogeneous()};
-    Eigen::Vector3d const pc1{proj1 * pw.homogeneous()};
-    if (pc0.z() < kZEps || pc1.z() < kZEps) {
-      continue;
+      size_t const track_id{track_cnt_++};
+      //* Try to triangulate the two observation
+      Eigen::Vector2d const pn0{camera->pix2Norm(pt.pixel_coord_src)};
+      Eigen::Vector2d const pn1{camera->pix2Norm(pt.pixel_coord)};
+      Eigen::Vector3d const pw{base::triangulatePoint(proj0, proj1, pn0, pn1)};
+      Eigen::Vector3d const pc0{proj0 * pw.homogeneous()};
+      Eigen::Vector3d const pc1{proj1 * pw.homogeneous()};
+      if (pc0.z() < kZEps || pc1.z() < kZEps) {
+        continue;
+      }
+      auto track{std::make_shared<Track>()};
+      track->id = track_id;
+      track->start_idx = sliding_window_.size() - 1UL;
+      track->depth = pc0.norm();
+      track->position = pw;
+      track->observations.clear();
+      track->observations.emplace_back(pt.pixel_coord_src,
+                                       camera->pix2Sphere(pt.pixel_coord_src));
+      track->observations.emplace_back(pt.pixel_coord,
+                                       camera->pix2Sphere(pt.pixel_coord));
+      track->is_triangulated = true;
+      track->valid = true;
+      tracks_.emplace(track_id, track);
+      sliding_window_.back().features.emplace(track_id, track->observations[0]);
+      frame.features.emplace(track_id, track->observations[1]);
+      ++added_cnt;
     }
-    auto track{std::make_shared<Track>()};
-    track->id = track_id;
-    track->start_idx = sliding_window_.size() - 1UL;
-    track->depth = pc0.norm();
-    track->position = pw;
-    track->observations.clear();
-    track->observations.emplace_back(pt.pixel_coord_src,
-                                     camera->pix2Sphere(pt.pixel_coord_src));
-    track->observations.emplace_back(pt.pixel_coord,
-                                     camera->pix2Sphere(pt.pixel_coord));
-    track->is_triangulated = true;
-    track->valid = true;
-    tracks_.emplace(track_id, track);
-    sliding_window_.back().features.emplace(track_id, track->observations[0]);
-    frame.features.emplace(track_id, track->observations[1]);
   }
+
+  std::cout << "[INFO] Updated " << updated_cnt << " tracks. "
+            << "Added " << added_cnt << " tracks. " << std::endl;
 
   sliding_window_.emplace_back(frame);
   frame_cnt_ += 1UL;
@@ -1124,12 +1496,12 @@ bool Estimator::isKeyframe() const {
     parallax /= static_cast<double>(covis_cnt);
   }
 
-  // if (covis_cnt <= config_.max_num_covis_keyframe) {
-  if (existing_track_cnt < 20UL || long_track_cnt < 40UL) {
-    // if (existing_track_cnt < 20UL || long_track_cnt < 40UL ||
-    //     new_track_cnt > existing_track_cnt / 2UL) {
-    return true;
-  }
+  // // if (covis_cnt <= config_.max_num_covis_keyframe) {
+  // if (existing_track_cnt < 20UL || long_track_cnt < 40UL) {
+  //   // if (existing_track_cnt < 20UL || long_track_cnt < 40UL ||
+  //   //     new_track_cnt > existing_track_cnt / 2UL) {
+  //   return true;
+  // }
 
   double const min_trans{std::max(1.0e-3, config_.min_frame_rel_trans)};
   if ((sliding_window_[window_size - 1UL].translation -
@@ -1194,7 +1566,7 @@ Estimator::AbsPoseEstReport Estimator::estimateAbsPoseRANSACPnP(
   }
 
   report.success = true;
-  report.rotation = ransac_report.model.leftCols<3>();
+  report.rotation = Eigen::Quaterniond(ransac_report.model.leftCols<3>());
   report.translation = ransac_report.model.rightCols<1>();
   report.inlier_mask = ransac_report.inlier_mask;
   report.num_inliers = ransac_report.num_inliers;
@@ -1247,6 +1619,7 @@ Estimator::AbsPoseEstReport Estimator::estimateAbsPoseIterativePnP(
           (error2 < kHuberDelta2) ? 1.0 : (kHuberDelta / std::sqrt(error2))};
       H += j_huber * jacobian.transpose() * jacobian;
       b += -j_huber * jacobian.transpose() * residual;
+      error += error2;
     }
 
     error = std::sqrt(error);
@@ -1258,13 +1631,13 @@ Estimator::AbsPoseEstReport Estimator::estimateAbsPoseIterativePnP(
       break;
     }
     rotation *=
-        Eigen::Quaterniond(1.0, 0.5 * delta(0), 0.5 * delta(1), 0.5 * delta(2))
-            .normalized();
+        Eigen::Quaterniond(1.0, 0.5 * delta(0), 0.5 * delta(1), 0.5 * delta(2));
+    rotation.normalize();
     translation += delta.tail<3>();
   }
 
   report.success = true;
-  report.rotation = rotation;
+  report.rotation = rotation.normalized();
   report.translation = translation;
   report.inlier_mask.resize(num_pts);
   report.num_inliers = 0UL;
@@ -1301,6 +1674,7 @@ void VertexCameraPose::plus(Eigen::VectorXd const &update) {
   if (!fix_rot) {
     estimate_.rotation *= Eigen::Quaterniond(1.0, 0.5 * update(0),
                                              0.5 * update(1), 0.5 * update(2));
+    estimate_.rotation.normalize();
   }
   if (!fix_trans) {
     estimate_.translation += update.tail<3>();
@@ -1326,68 +1700,89 @@ void EdgeProjection::computeResidual() {
       std::dynamic_pointer_cast<VertexTrackInvDepth>(this->getVertex(2UL))
           ->getEstimate()};
 
+  Eigen::Matrix3d const R0{camera_pose_0.rotation.toRotationMatrix()};
+  Eigen::Matrix3d const R1{camera_pose_1.rotation.toRotationMatrix()};
+  Eigen::Vector3d const t0{camera_pose_0.translation};
+  Eigen::Vector3d const t1{camera_pose_1.translation};
   // TODO Zero division protection
   double const d0{1.0 / inv_d};
-  Eigen::Vector3d const pw{camera_pose_0.rotation *
-                               (d0 * measurement_.sphere0) +
-                           camera_pose_0.translation};
-  Eigen::Vector3d const pc1{camera_pose_1.rotation.inverse() *
-                            (pw - camera_pose_1.translation)};
+  Eigen::Vector3d const pw{R0 * (d0 * measurement_.sphere0) + t0};
+  Eigen::Vector3d const tc1_p{pw - t1};
+  Eigen::Vector3d const pc1{R1.transpose() * tc1_p};
   Eigen::Vector3d const s1{pc1.normalized()};
   residual_ = tangent_base.transpose() * (s1 - measurement_.sphere1);
 }
 
-// void EdgeProjection::computeJacobians() {
-//   // TODO Support FEJ
-//   auto const camera_pose_0{
-//       std::dynamic_pointer_cast<VertexCameraPose>(this->getVertex(0UL))
-//           ->getEstimate()};
-//   auto const camera_pose_1{
-//       std::dynamic_pointer_cast<VertexCameraPose>(this->getVertex(1UL))
-//           ->getEstimate()};
-//   auto const inv_d{
-//       std::dynamic_pointer_cast<VertexTrackInvDepth>(this->getVertex(2UL))
-//           ->getEstimate()};
+void EdgeProjection::computeJacobians() {
+  // gopt::FactorGraph::Edge::computeJacobians();
+  // auto const tmp_jacobians{jacobians_};
+  // TODO Support FEJ
+  auto const camera_pose_0{
+      std::dynamic_pointer_cast<VertexCameraPose>(this->getVertex(0UL))
+          ->getEstimate()};
+  auto const camera_pose_1{
+      std::dynamic_pointer_cast<VertexCameraPose>(this->getVertex(1UL))
+          ->getEstimate()};
+  auto const inv_d{
+      std::dynamic_pointer_cast<VertexTrackInvDepth>(this->getVertex(2UL))
+          ->getEstimate()};
 
-//   Eigen::Matrix3d const R0{camera_pose_0.rotation.toRotationMatrix()};
-//   Eigen::Matrix3d const R1{camera_pose_1.rotation.toRotationMatrix()};
-//   Eigen::Vector3d const t0{camera_pose_0.translation};
-//   Eigen::Vector3d const t1{camera_pose_1.translation};
+  Eigen::Matrix3d const R0{camera_pose_0.rotation.toRotationMatrix()};
+  Eigen::Matrix3d const R1{camera_pose_1.rotation.toRotationMatrix()};
+  Eigen::Vector3d const t0{camera_pose_0.translation};
+  Eigen::Vector3d const t1{camera_pose_1.translation};
 
-//   double const d0{1.0 / inv_d};
-//   Eigen::Vector3d const pw{R0 * (d0 * measurement_.sphere0) + t0};
-//   Eigen::Vector3d const tc1_p{pw - t1};
-//   Eigen::Vector3d const pc1{R1.transpose() * tc1_p};
-//   Eigen::Vector3d const s1{pc1.normalized()};
-//   double const d1{pc1.norm()};
-//   double const inv_d1{1.0 / d1};
-//   Eigen::Matrix3d const ds1_dpc1{inv_d1 * Eigen::Matrix3d::Identity() -
-//                                  std::pow(inv_d1, 3.0) * pc1 *
-//                                  pc1.transpose()};
+  double const d0{1.0 / inv_d};
+  Eigen::Vector3d const pw{R0 * (d0 * measurement_.sphere0) + t0};
+  Eigen::Vector3d const tc1_p{pw - t1};
+  Eigen::Vector3d const pc1{R1.transpose() * tc1_p};
+  Eigen::Vector3d const s1{pc1.normalized()};
+  double const d1{pc1.norm()};
+  double const inv_d1{1.0 / d1};
+  Eigen::Matrix3d const ds1_dpc1{inv_d1 * Eigen::Matrix3d::Identity() -
+                                 std::pow(inv_d1, 3.0) * pc1 * pc1.transpose()};
 
-//   jacobians_[0] = Eigen::MatrixXd::Zero(2, 6);
-//   Eigen::Matrix3d const dpc1_dr0{
-//       -d0 * R1.transpose() * R0 *
-//       my3d::util::getSkewSymmetric(measurement_.sphere0)};
-//   Eigen::Matrix3d const dpc1_dt0{R1.transpose()};
-//   jacobians_[0].leftCols<3>() = tangent_base.transpose() * ds1_dpc1 *
-//   dpc1_dr0; jacobians_[0].rightCols<3>() = tangent_base.transpose() *
-//   ds1_dpc1 * dpc1_dt0;
+  jacobians_[0] = Eigen::MatrixXd::Zero(2, 6);
+  Eigen::Matrix3d const dpc1_dr0{
+      -R1.transpose() * R0 *
+      my3d::util::getSkewSymmetric(measurement_.sphere0) / inv_d};
+  Eigen::Matrix3d const dpc1_dt0{R1.transpose()};
+  jacobians_[0].leftCols<3>() = tangent_base.transpose() * ds1_dpc1 * dpc1_dr0;
+  jacobians_[0].rightCols<3>() = tangent_base.transpose() * ds1_dpc1 * dpc1_dt0;
 
-//   jacobians_[1] = Eigen::MatrixXd::Zero(2, 6);
-//   Eigen::Matrix3d const dpc1_dr1{
-//       my3d::util::getSkewSymmetric(R1.transpose() * tc1_p)};
-//   Eigen::Matrix3d const dpc1_dt1{-R1.transpose()};
-//   jacobians_[1].leftCols<3>() = tangent_base.transpose() * ds1_dpc1 *
-//   dpc1_dr1; jacobians_[1].rightCols<3>() = tangent_base.transpose() *
-//   ds1_dpc1 * dpc1_dt1;
+  jacobians_[1] = Eigen::MatrixXd::Zero(2, 6);
+  Eigen::Matrix3d const dpc1_dr1{
+      my3d::util::getSkewSymmetric(R1.transpose() * tc1_p)};
+  Eigen::Matrix3d const dpc1_dt1{-R1.transpose()};
+  jacobians_[1].leftCols<3>() = tangent_base.transpose() * ds1_dpc1 * dpc1_dr1;
+  jacobians_[1].rightCols<3>() = tangent_base.transpose() * ds1_dpc1 * dpc1_dt1;
 
-//   jacobians_[2] = Eigen::MatrixXd::Zero(2, 1);
-//   Eigen::Vector3d const dpc1_dinvd{-R1.transpose() * R0 *
-//   measurement_.sphere0 *
-//                                    d0 * d0};
-//   jacobians_[2] = tangent_base.transpose() * ds1_dpc1 * dpc1_dinvd;
-// }
+  jacobians_[2] = Eigen::MatrixXd::Zero(2, 1);
+  Eigen::Vector3d const dpc1_dinvd{-R1.transpose() * R0 * measurement_.sphere0 /
+                                   (inv_d * inv_d)};
+  jacobians_[2] = tangent_base.transpose() * ds1_dpc1 * dpc1_dinvd;
+
+  // std::cout << (tmp_jacobians[0].leftCols<3>() -
+  // jacobians_[0].leftCols<3>()).cwiseAbs().maxCoeff() << " "
+  //           << (tmp_jacobians[0].rightCols<3>() -
+  //           jacobians_[0].rightCols<3>()).cwiseAbs().maxCoeff() << " "
+  //           << (tmp_jacobians[1].leftCols<3>() -
+  //           jacobians_[1].leftCols<3>()).cwiseAbs().maxCoeff() << " "
+  //           << (tmp_jacobians[1].rightCols<3>() -
+  //           jacobians_[1].rightCols<3>()).cwiseAbs().maxCoeff() << " "
+  //           << (tmp_jacobians[2] - jacobians_[2]).cwiseAbs().maxCoeff() <<
+  //           std::endl;
+  // std::cout << "---------" << std::endl;
+  // std::cout << (tmp_jacobians[0].leftCols<3>() - jacobians_[0].leftCols<3>())
+  // << "\n"
+  //           << (tmp_jacobians[0].rightCols<3>() -
+  //           jacobians_[0].rightCols<3>()) << "\n"
+  //           << (tmp_jacobians[1].leftCols<3>() - jacobians_[1].leftCols<3>())
+  //           << "\n"
+  //           << (tmp_jacobians[1].rightCols<3>() -
+  //           jacobians_[1].rightCols<3>()) << "\n"
+  //           << (tmp_jacobians[2] - jacobians_[2]).transpose() << std::endl;
+}
 
 void EdgeProjection::setTangentBase(
     EdgeProjectionMeasurement const &measurement) {
@@ -1400,6 +1795,72 @@ void EdgeProjection::setTangentBase(
   Eigen::Vector3d const b2{m.cross(b1).normalized()};
   tangent_base.col(0) = b1;
   tangent_base.col(1) = b2;
+}
+
+EdgeMarginPrior::EdgeMarginPrior(
+    size_t const id, Eigen::MatrixXd const &lj, Eigen::VectorXd const &lr,
+    std::vector<gopt::FactorGraph::VertexPtr> const &lp,
+    std::vector<gopt::FactorGraph::VertexPtr> const &vs)
+    : linearized_point{lp}, linearized_jacobian{lj}, linearized_residual{lr} {
+  assert(linearized_jacobian.rows() == linearized_residual.size());
+  assert(linearized_jacobian.rows() == linearized_jacobian.cols());
+  assert(linearized_point.size() == vs.size());
+  this->setId(id);
+  size_t const num_vs{vs.size()};
+  vertices_ = vs;
+  jacobians_.resize(num_vs);
+  residual_ = Eigen::VectorXd::Zero(linearized_residual.size());
+  dimension_ = residual_.size();
+  this->setInformation(Eigen::MatrixXd::Identity(dimension_, dimension_));
+  for (size_t i{0UL}; i < vs.size(); ++i) {
+    assert(typeid(linearized_point[i].get()) == typeid(vs[i].get()));
+    assert(linearized_point[i].get() != vs[i].get());
+    assert(linearized_point[i] != nullptr);
+  }
+}
+
+void EdgeMarginPrior::computeResidual() {
+  residual_.setZero();
+  Eigen::VectorXd dx{Eigen::VectorXd::Zero(linearized_jacobian.cols())};
+  Eigen::Index p{0L};
+  for (size_t i{0UL}; i < vertices_.size(); ++i) {
+    auto const &v{vertices_[i]};
+    auto const &v0{linearized_point[i]};
+    if (typeid(*v) == typeid(VertexCameraPose)) {
+      auto const x{
+          std::dynamic_pointer_cast<VertexCameraPose>(v)->getEstimate()};
+      auto const x0{
+          std::dynamic_pointer_cast<VertexCameraPose>(v0)->getEstimate()};
+      Eigen::Quaterniond const dq{
+          (x0.rotation.inverse() * x.rotation).normalized()};
+      dx.segment<3>(p) =
+          2.0 * (dq.w() >= 0 ? Eigen::Vector3d(dq.x(), dq.y(), dq.z())
+                             : Eigen::Vector3d(-dq.x(), -dq.y(), -dq.z()));
+      dx.segment<3>(p + 3) = x.translation - x0.translation;
+      p += 6L;
+    } else if (typeid(*v) == typeid(VertexTrackInvDepth)) {
+      auto const x{
+          std::dynamic_pointer_cast<VertexTrackInvDepth>(v)->getEstimate()};
+      auto const x0{
+          std::dynamic_pointer_cast<VertexTrackInvDepth>(v0)->getEstimate()};
+      dx(p) = x - x0;
+      p += 1L;
+    } else {
+      assert(false);
+    }
+  }
+
+  residual_ = linearized_jacobian * dx - linearized_residual;
+}
+
+void EdgeMarginPrior::computeJacobians() {
+  Eigen::Index p{0L};
+  for (size_t i{0UL}; i < vertices_.size(); ++i) {
+    Eigen::Index const local_dim{
+        static_cast<Eigen::Index>(vertices_[i]->localDimension())};
+    jacobians_[i] = linearized_jacobian.middleCols(p, local_dim);
+    p += local_dim;
+  }
 }
 
 } // namespace gopt
