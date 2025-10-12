@@ -243,13 +243,15 @@ public:
     double min_abs_pose_inlier_ratio{0.5};
     double min_num_frames_opt{2UL};
     /* max absolute pose estimation inlier reprojection error in pixel */
-    double max_abs_pose_reproj_error{12.0};
+    double max_abs_pose_reproj_error{6.0};
     double max_valid_track_avg_proj_error_deg{0.5};
     double min_frame_rel_trans{3.0};
     double min_avg_parallax_keyframe_deg{0.1};
     size_t max_num_covis_keyframe{30UL};
+    double max_inlier_epipolar_error_pix{6.0};
     double dist_init_pair{1.0};
-
+    double min_tri_angle_deg{1.0};
+    double min_tri_angle_deg_init{5.0};
     size_t window_size{10UL};
     FeatureTracker::Config feature_tracker_config{};
 
@@ -410,9 +412,11 @@ private:
   /**
    * @brief Check whether the newest frame is a keyframe
    */
-  bool isKeyframe() const;
+  bool isKeyframe() const noexcept;
 
-  //! Make sure the track_id exsists, or coredump will occur
+  size_t retriangulateTracks() noexcept;
+
+  //! Make sure the track_id exists, or coredump will occur
   double computeTrackAvgProjAngleError(size_t const track_id) const noexcept;
 
   AbsPoseEstReport

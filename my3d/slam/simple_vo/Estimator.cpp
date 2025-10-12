@@ -114,6 +114,12 @@ void Estimator::feedFrame(std::shared_ptr<base::Image> const &image,
   std::cout << "[INFO] is_keyframe: " << regist_report_.is_keyframe
             << std::endl;
 
+  //* Try to triangulated tracks that failed to be triangulated due to too small
+  //* triangulated angle
+  size_t const num_retris{retriangulateTracks()};
+  std::cout << "[INFO] Retriangulated " << num_retris << " tracks. "
+            << std::endl;
+
   //* Sliding window optimization
   // if (regist_report_.is_keyframe) {
   optimize();
@@ -647,10 +653,20 @@ void Estimator::optimize() noexcept {
     v->setEstimate(gopt::CameraPose(frame.rotation,
                                     norm_s * (frame.translation + norm_t)));
     v->frame_idx = i;
-    if (frame.id == 0UL) {
+    // if (frame.id == 0UL) {
+    //   v->fix_rot = true;
+    //   v->fix_trans = true;
+    // } else if (frame.id == 1UL) {
+    //   v->fix_rot = false;
+    //   v->fix_trans = true;
+    // } else {
+    //   v->fix_rot = false;
+    //   v->fix_trans = false;
+    // }
+    if (i == 0UL) {
       v->fix_rot = true;
       v->fix_trans = true;
-    } else if (frame.id == 1UL) {
+    } else if (i == 1UL) {
       v->fix_rot = false;
       v->fix_trans = true;
     } else {
@@ -698,19 +714,9 @@ void Estimator::optimize() noexcept {
         1.0 / (track->depth * norm_s), track_id, track->start_idx)};
     v->setId(vid);
     v->setMarginalized(true);
-    // if (!regist_report_.is_keyframe)
-    // {
-    //   v->is_fixed = true;
-    // } else {
-    //   v->is_fixed = false;
-    // }
-    // if (!graph.addVertex(v)) {
-    //   std::cout << "[ERROR] Failed to add track vertex for track " <<
-    //   track_id
-    //             << ". "
-    //             << "Optimization will not be applied. " << std::endl;
-    //   return;
-    // }
+    // bool const should_be_fixed{window_size > config_.window_size &&
+    //                            track->start_idx <= window_size / 2UL};
+    // v->is_fixed = should_be_fixed;
     vertices_track.emplace(track_id, v);
     track->is_optimized = true;
     ++vid;
@@ -833,11 +839,11 @@ void Estimator::filterTracks() noexcept {
       util::deg2Rad(config_.max_valid_track_avg_proj_error_deg)};
   std::unordered_set<size_t> removed_ids{};
   for (auto const &[track_id, track] : tracks_) {
-    if (!track->is_triangulated) {
+    if (track->valid && !track->is_triangulated) {
       continue;
     }
 
-    if (!track->is_optimized) {
+    if (track->valid && !track->is_optimized) {
       continue;
     }
 
@@ -868,6 +874,13 @@ void Estimator::filterTracks() noexcept {
       // ";
       track->valid = false;
       // removed_tracks_.emplace(track_id, track);
+      removed_tracks_.insert(std::make_pair(track_id, track));
+      removed_ids.emplace(track_id);
+      continue;
+    }
+
+    if (track->observations.size() < 2UL) {
+      track->valid = false;
       removed_tracks_.insert(std::make_pair(track_id, track));
       removed_ids.emplace(track_id);
       continue;
@@ -1145,7 +1158,7 @@ void Estimator::marginalize(
   Eigen::VectorXd const inv_evs_Hmm{
       (evs_Hmm.array() > 0.0).select(evs_Hmm.cwiseInverse(), 0.0)};
   // std::cout << "[" << (evs_Hmm.cwiseProduct(inv_evs_Hmm)).transpose() << "] "
-            // << std::endl;
+  // << std::endl;
   Eigen::MatrixXd const inv_Hmm{eigen_solver_Hmm.eigenvectors() *
                                 inv_evs_Hmm.asDiagonal() *
                                 eigen_solver_Hmm.eigenvectors().transpose()};
@@ -1194,21 +1207,21 @@ void Estimator::slideWindow(MarginType const margin_type) noexcept {
     sliding_window_.erase(sliding_window_.begin());
     for (auto const &[track_id, track] : tracks_) {
       if (!track->valid) {
-        std::cout << "slide window line " << __LINE__ << std::endl;
+        // std::cout << "slide window line " << __LINE__ << std::endl;
         removed_tracks_.emplace(track_id, track);
         removed_ids.emplace(track_id);
         deleted_track_ids.emplace(track_id);
         continue;
       }
       if (track->start_idx == 0UL) {
-        std::cout << "slide window line " << __LINE__ << std::endl;
+        // std::cout << "slide window line " << __LINE__ << std::endl;
         // if (track->observations.size() <= 2UL) {
-          track->valid = false;
-          removed_tracks_.emplace(track_id, track);
-          removed_ids.emplace(track_id);
-          margined_track_ids.emplace(track_id);
-          // deleted_track_ids.emplace(track_id);
-          continue;
+        track->valid = false;
+        removed_tracks_.emplace(track_id, track);
+        removed_ids.emplace(track_id);
+        margined_track_ids.emplace(track_id);
+        // deleted_track_ids.emplace(track_id);
+        continue;
         // }
 
         track->observations.erase(track->observations.begin());
@@ -1388,29 +1401,70 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
   frame.translation = abs_pose_report.translation;
   frame.features.clear();
   size_t updated_cnt{0UL};
+  double const sqr_max_epipolar_error{std::pow(
+      camera->thresholdPix2Norm(config_.max_inlier_epipolar_error_pix), 2.0)};
   for (auto const &[track_id, track] : tracks_) {
     if (track_ids.find(track_id) == track_ids.end()) {
-      continue;
-    }
-    size_t const index{track_ids.at(track_id)};
-    if (abs_pose_report.inlier_mask[index]) {
-      Observation obs{};
-      obs.pixel_coord = tracked_pts.tracked_pts.at(track_id).pixel_coord;
-      obs.sphere_coord = tracked_pts.tracked_pts.at(track_id).sphere_coord;
-      track->observations.emplace_back(obs);
-      frame.features.emplace(track_id, obs);
+      // Update untriangulated tracks
+      if (track->valid && !track->is_triangulated &&
+          track->observations.size() >= 1UL &&
+          tracked_pts.tracked_pts.find(track_id) !=
+              tracked_pts.tracked_pts.end()) {
+        auto const &pt{tracked_pts.tracked_pts.at(track_id)};
+        Frame const &frame_0{sliding_window_[track->start_idx]};
+        Eigen::Quaterniond const rel_rot{frame.rotation.inverse() *
+                                         frame_0.rotation};
+        Eigen::Vector3d const rel_trans{
+            frame.rotation.inverse() * (frame_0.translation - frame.translation)};
+        Eigen::Matrix3d const ess_mat{estimator::essentialMatrixFromPose(
+            rel_rot.toRotationMatrix(), rel_trans)};
+        Eigen::Vector2d const pn0{
+            camera->pix2Norm(frame_0.features.at(track_id).pixel_coord)};
+        Eigen::Vector2d const pn1{camera->pix2Norm(pt.pixel_coord)};
+        double const sqr_epipolar_error{
+            estimator::computeSquaredSampsonError(pn0, pn1, ess_mat)};
+        if (sqr_epipolar_error > sqr_max_epipolar_error) {
+          track->valid = false;
+          continue;
+        }
+        Observation obs{};
+        obs.pixel_coord = pt.pixel_coord;
+        obs.sphere_coord = pt.sphere_coord;
+        track->observations.emplace_back(obs);
+        frame.features.emplace(track_id, obs);
+        ++updated_cnt;
+      }
     } else {
-      // // Delete the interrupted track
-      // track->valid = false;
+      size_t const index{track_ids.at(track_id)};
+      if (abs_pose_report.inlier_mask[index]) {
+        auto const &pt{tracked_pts.tracked_pts.at(track_id)};
+        Observation obs{};
+        obs.pixel_coord = pt.pixel_coord;
+        obs.sphere_coord = pt.sphere_coord;
+        track->observations.emplace_back(obs);
+        frame.features.emplace(track_id, obs);
+      } else {
+        // // Delete the interrupted track
+        // track->valid = false;
+      }
+      ++updated_cnt;
     }
-    ++updated_cnt;
   }
+
   // Add new tracks
   size_t added_cnt{0UL};
   if (last_frame_info_.is_keyframe) {
     Eigen::Matrix3x4d const proj0{last_frame_info_.getProjectionMatrix()};
     Eigen::Matrix3x4d const proj1{frame.getProjectionMatrix()};
+    Eigen::Quaterniond const rel_rot{frame.rotation.inverse() *
+                                     last_frame_info_.last_tracking_rotation};
+    Eigen::Vector3d const rel_trans{
+        frame.rotation.inverse() *
+        (last_frame_info_.last_tracking_translation - frame.translation)};
+    Eigen::Matrix3d const ess_mat{estimator::essentialMatrixFromPose(
+        rel_rot.toRotationMatrix(), rel_trans)};
     double const kZEps{3.0e-2};
+    double const min_tri_angle{util::deg2Rad(config_.min_tri_angle_deg)};
     for (auto const &pt : tracked_pts.tracked_add_pts) {
       if (!pt.valid) {
         continue;
@@ -1418,8 +1472,14 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
 
       size_t const track_id{track_cnt_++};
       //* Try to triangulate the two observation
+      // TODO Support fisheye triangulation
       Eigen::Vector2d const pn0{camera->pix2Norm(pt.pixel_coord_src)};
       Eigen::Vector2d const pn1{camera->pix2Norm(pt.pixel_coord)};
+      double const sqr_epipolar_error{
+          estimator::computeSquaredSampsonError(pn0, pn1, ess_mat)};
+      if (sqr_epipolar_error > sqr_max_epipolar_error) {
+        continue;
+      }
       Eigen::Vector3d const pw{base::triangulatePoint(proj0, proj1, pn0, pn1)};
       Eigen::Vector3d const pc0{proj0 * pw.homogeneous()};
       Eigen::Vector3d const pc1{proj1 * pw.homogeneous()};
@@ -1436,7 +1496,13 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
                                        camera->pix2Sphere(pt.pixel_coord_src));
       track->observations.emplace_back(pt.pixel_coord,
                                        camera->pix2Sphere(pt.pixel_coord));
-      track->is_triangulated = true;
+      double const tri_angle{base::computeTriangulationAngle(
+          last_frame_info_.last_tracking_translation, frame.translation, pw)};
+      if (tri_angle >= min_tri_angle) {
+        track->is_triangulated = true;
+      } else {
+        track->is_triangulated = false;
+      }
       track->valid = true;
       tracks_.emplace(track_id, track);
       sliding_window_.back().features.emplace(track_id, track->observations[0]);
@@ -1460,7 +1526,7 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
   return report;
 }
 
-bool Estimator::isKeyframe() const {
+bool Estimator::isKeyframe() const noexcept {
   size_t const window_size{sliding_window_.size()};
   double parallax{0.0};
   size_t covis_cnt{0UL};
@@ -1515,6 +1581,61 @@ bool Estimator::isKeyframe() const {
   // }
 
   return false;
+}
+
+size_t Estimator::retriangulateTracks() noexcept {
+  size_t retri_cnt{0UL};
+  size_t const window_size{sliding_window_.size()};
+  if (window_size <= 2UL) {
+    std::cout << "[WARNING] Window size is less than 3. "
+                 "No track will be retriangulated. "
+              << std::endl;
+    return retri_cnt;
+  }
+
+  double const min_tri_angle{util::deg2Rad(config_.min_tri_angle_deg)};
+  auto const camera{config_.feature_tracker_config.camera};
+  double const kZEps{3.0e-2};
+  for (auto const &[track_id, track] : tracks_) {
+    if (!track->valid) {
+      continue;
+    }
+    if (track->is_triangulated) {
+      continue;
+    }
+    if (track->observations.size() < 2UL ||
+        track->start_idx + track->observations.size() > window_size) {
+      continue;
+    }
+
+    Frame const &frame_0{sliding_window_[track->start_idx]};
+    Frame const &frame_1{
+        sliding_window_[track->start_idx + track->observations.size() - 1UL]};
+    Eigen::Matrix3x4d const proj0{frame_0.getProjectionMatrix()};
+    Eigen::Matrix3x4d const proj1{frame_1.getProjectionMatrix()};
+    Eigen::Vector2d const pt0{
+        camera->pix2Norm(track->observations.front().pixel_coord)};
+    Eigen::Vector2d const pt1{
+        camera->pix2Norm(track->observations.back().pixel_coord)};
+    Eigen::Vector3d const pw{base::triangulatePoint(proj0, proj1, pt0, pt1)};
+    Eigen::Vector3d const pc0{proj0 * pw.homogeneous()};
+    Eigen::Vector3d const pc1{proj1 * pw.homogeneous()};
+    if (pc0.z() < kZEps || pc1.z() < kZEps) {
+      continue;
+    }
+    double const tri_angle{base::computeTriangulationAngle(
+        frame_0.translation, frame_1.translation, pw)};
+    if (tri_angle < min_tri_angle) {
+      track->is_triangulated = false;
+      continue;
+    }
+    track->depth = pc0.norm();
+    track->position = pw;
+    track->is_triangulated = true;
+    ++retri_cnt;
+  }
+
+  return retri_cnt;
 }
 
 double

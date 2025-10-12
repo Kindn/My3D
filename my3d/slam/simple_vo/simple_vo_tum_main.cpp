@@ -64,6 +64,8 @@ int main(int argc, char **argv) {
       1.0;
   estimator_config.feature_tracker_config.camera =
       std::make_shared<base::RadialPinHoleCamera>(K, 0.0, 0.0);
+  estimator_config.feature_tracker_config.max_num_corners = 200UL;
+  estimator_config.feature_tracker_config.min_dist = 10.0;
   estimator_config.init_e_ransac_config.max_inlier_error =
       estimator_config.feature_tracker_config.camera->thresholdPix2Norm(4.0);
   estimator_config.init_e_ransac_config.min_iter_num = 30UL;

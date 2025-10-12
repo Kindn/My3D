@@ -27,7 +27,7 @@ namespace simple_vo {
 class FeatureTracker {
 public:
   struct Config {
-    int32_t max_num_corners{300};
+    int32_t max_num_corners{200};
     double quality_level{0.01};
     int32_t min_dist{30};
     std::shared_ptr<base::CameraBase> camera{nullptr};

@@ -56,6 +56,12 @@ int main(int argc, char **argv) {
   util::TicToc tic_toc{};
   while (cap.isOpened()) {
     cap >> frame_cv;
+    if (frame_cv.empty()) {
+      std::cout << "[ERROR] Frame is empty. Maybe video stream is over."
+                << "Press any key to exit. " << std::endl;
+      cv::waitKey(0);
+      return 0;
+    }
     // cv::imshow("frame raw", frame_cv);
     cv::Mat frame_gray_cv{};
     if (frame_cv.channels() == 3) {
