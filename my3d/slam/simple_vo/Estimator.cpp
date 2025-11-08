@@ -166,28 +166,43 @@ void Estimator::drawTrackingResult(cv::Mat &image) const noexcept {
       continue;
     }
 
-    cv::Scalar color(0, 0, 255);
+    cv::Scalar color(255, 0, 0);
     if (is_initialized_) {
       if (tracks_.find(track_id) != tracks_.end()) {
         auto const &track{tracks_.at(track_id)};
-        double const a{static_cast<double>(track->observations.size()) /
-                       (config_.window_size + 1UL)};
-        color = cv::Scalar(0, util::clamp<int32_t>(a * 255, 0, 255),
-                           util::clamp<int32_t>((1.0 - a) * 255, 0, 255));
+        if (track->valid && track->is_optimized && track->is_triangulated) {
+          double const a{static_cast<double>(track->observations.size()) /
+                         (config_.window_size + 1UL)};
+          color = cv::Scalar(0, util::clamp<int32_t>(a * 255, 0, 255),
+                             util::clamp<int32_t>((1.0 - a) * 255, 0, 255));
+        } else if (!track->valid) {
+          color = cv::Scalar(255, 80, 255);
+        }
       }
     } else {
       if (initial_tracks_.find(track_id) != initial_tracks_.end()) {
         auto const &track{initial_tracks_.at(track_id)};
-        double const a{static_cast<double>(track->observations.size()) /
-                       (config_.window_size + 1UL)};
-        color = cv::Scalar(0, util::clamp<int32_t>(a * 255, 0, 255),
-                           util::clamp<int32_t>((1.0 - a) * 255, 0, 255));
+        if (track->valid && track->is_optimized && track->is_triangulated) {
+          double const a{static_cast<double>(track->observations.size()) /
+                         (config_.window_size + 1UL)};
+          color = cv::Scalar(0, util::clamp<int32_t>(a * 255, 0, 255),
+                             util::clamp<int32_t>((1.0 - a) * 255, 0, 255));
+        } else if (!track->valid) {
+          color = cv::Scalar(255, 80, 255);
+        }
       }
     }
     cv::circle(image,
                cv::Point(static_cast<int32_t>(tracked_pt.pixel_coord.x()),
                          static_cast<int32_t>(tracked_pt.pixel_coord.y())),
                2, color, -1);
+    cv::rectangle(
+        image,
+        cv::Point(static_cast<int32_t>(tracked_pt.pixel_coord.x()) - 4,
+                  static_cast<int32_t>(tracked_pt.pixel_coord.y()) - 4),
+        cv::Point(static_cast<int32_t>(tracked_pt.pixel_coord.x()) + 4,
+                  static_cast<int32_t>(tracked_pt.pixel_coord.y()) + 4),
+        color, 1);
     cv::line(image,
              cv::Point(static_cast<int32_t>(tracked_pt.pixel_coord_src.x()),
                        static_cast<int32_t>(tracked_pt.pixel_coord_src.y())),
@@ -227,6 +242,9 @@ void Estimator::updateFrameInfo(std::shared_ptr<base::Image> const &image,
     last_frame_info_.last_pts.clear();
     last_frame_info_.last_pts.reserve(initial_tracks_.size());
     for (auto const &[track_id, track] : initial_tracks_) {
+      if (!track->valid) {
+        continue;
+      }
       FeatureTracker::InputPoint ft_in{};
       ft_in.id = track_id;
       ft_in.pos = track->observations[0].pixel_coord;
@@ -244,6 +262,9 @@ void Estimator::updateFrameInfo(std::shared_ptr<base::Image> const &image,
     last_frame_info_.last_pts.clear();
     last_frame_info_.last_pts.reserve(tracks_.size());
     for (auto const &[track_id, track] : tracks_) {
+      if (!track->valid) {
+        continue;
+      }
       FeatureTracker::InputPoint ft_in{};
       ft_in.id = track_id;
       ft_in.pos = track->observations[1].pixel_coord;
@@ -261,6 +282,9 @@ void Estimator::updateFrameInfo(std::shared_ptr<base::Image> const &image,
     EigenUMap<size_t, FeatureTracker::InputPoint> tmp_last_pts{};
     for (auto const &[track_id, obs] : sliding_window_.back().features) {
       if (tracks_.find(track_id) == tracks_.end()) {
+        continue;
+      }
+      if (!tracks_.at(track_id)->valid) {
         continue;
       }
       FeatureTracker::InputPoint ft_in{};
@@ -297,7 +321,7 @@ void Estimator::createInitialTracks(
     track.observations.emplace_back(initial_corners[i],
                                     camera->pix2Sphere(initial_corners[i]));
     track.is_triangulated = false;
-    track.valid = false;
+    track.valid = true;
     initial_tracks_.emplace(i, std::make_shared<Track>(track));
   }
 }
@@ -718,7 +742,6 @@ void Estimator::optimize() noexcept {
     //                            track->start_idx <= window_size / 2UL};
     // v->is_fixed = should_be_fixed;
     vertices_track.emplace(track_id, v);
-    track->is_optimized = true;
     ++vid;
   }
   // std::cout << "opt line " << __LINE__ << std::endl;
@@ -739,13 +762,27 @@ void Estimator::optimize() noexcept {
         break;
       }
 
+      Eigen::Matrix2d info{Eigen::Matrix2d::Identity()};
+      double constexpr kMinWeight{1.0e-6};
+      double constexpr kEps{1.0e-8};
+      double constexpr kWeightDecayRatio{0.1};
+      double const base_line{(sliding_window_[frame_idx].translation -
+                              sliding_window_[start_idx].translation)
+                                 .norm()};
+      // if (base_line < config_.min_tri_base_line) {
+      //   double const scale{std::max(
+      //       kMinWeight, std::pow(kWeightDecayRatio, config_.min_tri_base_line /
+      //                                                   (base_line + kEps)))};
+      //   info *= scale;
+      // }
+
       auto const vf1{vertices_frame.at(sliding_window_[frame_idx].id)};
       auto const meas_sphere1{observations[i].sphere_coord};
       gopt::EdgeProjectionMeasurement const measurement{meas_sphere0,
                                                         meas_sphere1};
       auto const e{std::make_shared<gopt::EdgeProjection>(
-          eid, track_id, start_idx, frame_idx, vf0, vf1, vt, measurement,
-          Eigen::Matrix2d::Identity(), std::make_shared<gopt::HuberLoss>(0.2))};
+          eid, track_id, start_idx, frame_idx, vf0, vf1, vt, measurement, info,
+          std::make_shared<gopt::HuberLoss>(0.5))};
       if (!graph.addEdge(e)) {
         std::cout << "[ERROR] Failed to add projection edge ("
                   << "frame0: " << start_idx << ", "
@@ -754,6 +791,7 @@ void Estimator::optimize() noexcept {
                   << "Optimization will not be applied. " << std::endl;
         return;
       }
+      track->is_optimized = true;
       edges_proj.emplace_back(e);
       ++eid;
     }
@@ -1415,7 +1453,8 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
         Eigen::Quaterniond const rel_rot{frame.rotation.inverse() *
                                          frame_0.rotation};
         Eigen::Vector3d const rel_trans{
-            frame.rotation.inverse() * (frame_0.translation - frame.translation)};
+            frame.rotation.inverse() *
+            (frame_0.translation - frame.translation)};
         Eigen::Matrix3d const ess_mat{estimator::essentialMatrixFromPose(
             rel_rot.toRotationMatrix(), rel_trans)};
         Eigen::Vector2d const pn0{
@@ -1444,8 +1483,10 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
         track->observations.emplace_back(obs);
         frame.features.emplace(track_id, obs);
       } else {
-        // // Delete the interrupted track
-        // track->valid = false;
+        if (track->observations.size() < 2UL) {
+          track->valid = false;
+          continue;
+        }
       }
       ++updated_cnt;
     }
@@ -1470,7 +1511,7 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
         continue;
       }
 
-      size_t const track_id{track_cnt_++};
+      size_t const track_id{track_cnt_};
       //* Try to triangulate the two observation
       // TODO Support fisheye triangulation
       Eigen::Vector2d const pn0{camera->pix2Norm(pt.pixel_coord_src)};
@@ -1498,15 +1539,21 @@ Estimator::registerFrame(FeatureTracker::Result const &tracked_pts,
                                        camera->pix2Sphere(pt.pixel_coord));
       double const tri_angle{base::computeTriangulationAngle(
           last_frame_info_.last_tracking_translation, frame.translation, pw)};
-      if (tri_angle >= min_tri_angle) {
+      double const base_line{
+          (last_frame_info_.last_tracking_translation - frame.translation)
+              .norm()};
+      if (tri_angle >= min_tri_angle &&
+          base_line >= config_.min_tri_base_line) {
         track->is_triangulated = true;
       } else {
         track->is_triangulated = false;
       }
       track->valid = true;
+      track->is_optimized = false;
       tracks_.emplace(track_id, track);
       sliding_window_.back().features.emplace(track_id, track->observations[0]);
       frame.features.emplace(track_id, track->observations[1]);
+      ++track_cnt_;
       ++added_cnt;
     }
   }
@@ -1625,7 +1672,8 @@ size_t Estimator::retriangulateTracks() noexcept {
     }
     double const tri_angle{base::computeTriangulationAngle(
         frame_0.translation, frame_1.translation, pw)};
-    if (tri_angle < min_tri_angle) {
+    double const base_line{(frame_0.translation - frame_1.translation).norm()};
+    if (tri_angle < min_tri_angle || base_line < config_.min_tri_base_line) {
       track->is_triangulated = false;
       continue;
     }

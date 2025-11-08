@@ -173,10 +173,10 @@ void FeatureTracker::trackLK(std::shared_ptr<base::Image> const &src,
     for (size_t i{0UL}; i < num_pts; ++i) {
       Eigen::Vector2d const diff(pts_cv[i].x - tracked_pts_cv_back[i].x,
                                  pts_cv[i].y - tracked_pts_cv_back[i].y);
-      status[i] =
-          (status[i] > 0 && status_back[i] && diff.squaredNorm() <= max_error2)
-              ? 1
-              : 0;
+      status[i] = (status[i] > 0 && status_back[i] > 0 &&
+                   diff.squaredNorm() <= max_error2)
+                      ? 1
+                      : 0;
     }
   }
 
@@ -186,13 +186,16 @@ void FeatureTracker::trackLK(std::shared_ptr<base::Image> const &src,
 
   tracked_pts.clear();
   tracked_pts.resize(num_pts);
+  int32_t constexpr kBorderSize{0};
   for (size_t i{0UL}; i < num_pts; ++i) {
     tracked_pts[i].x() = tracked_pts_cv[i].x;
     tracked_pts[i].y() = tracked_pts_cv[i].y;
     int32_t const xi{static_cast<int32_t>(std::round(tracked_pts_cv[i].x))};
     int32_t const yi{static_cast<int32_t>(std::round(tracked_pts_cv[i].y))};
-    if (xi < 0 || xi > static_cast<int32_t>(tgt->cols() - 1UL) || yi < 0 ||
-        yi > static_cast<int32_t>(tgt->rows() - 1UL)) {
+    if (xi < kBorderSize ||
+        xi > static_cast<int32_t>(tgt->cols() - kBorderSize - 1UL) ||
+        yi < kBorderSize ||
+        yi > static_cast<int32_t>(tgt->rows() - kBorderSize - 1UL)) {
       status[i] = 0;
     }
   }
