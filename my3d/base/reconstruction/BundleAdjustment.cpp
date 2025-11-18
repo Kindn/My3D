@@ -359,16 +359,16 @@ BundleAdjustment::optimize() {
         solver = new gopt::GaussNewtonSolver;
 
     case OptAlgorithm::ALGORITHM_GAUSS_NEWTON_SHUR: 
-        solver = new gopt::GaussNewtonShurSolver;
+        solver = new gopt::GaussNewtonSchurSolver;
     
     case OptAlgorithm::ALGORITHM_GAUSS_NEWTON_SPARSE_SHUR: 
-        solver = new gopt::GaussNewtonSparseShurSolver;
+        solver = new gopt::GaussNewtonSparseSchurSolver;
 
     case OptAlgorithm::ALGORITHM_LEVENBERG_MARQUART_SPARSE_SHUR: 
-        solver = new gopt::LevenbergMarquartSparseShurSolver;
+        solver = new gopt::LevenbergMarquartSparseSchurSolver;
     
     default:
-        solver = new gopt::LevenbergMarquartSparseShurSolver;
+        solver = new gopt::LevenbergMarquartSparseSchurSolver;
     }
 
     gopt::FactorGraph graph; 

@@ -15,7 +15,7 @@ Eigen::Matrix3d axisAngle2RotationMatrix(const Eigen::Vector3d &axis,
     const Eigen::Vector3d axis_n = axis.normalized();
 
     return std::cos(angle) * Eigen::Matrix3d::Identity() + 
-           std::sin(angle) * util::skewSymmetric(axis_n) + 
+           std::sin(angle) * util::getSkewSymmetric(axis_n) + 
            (1.0 - std::cos(angle)) * axis_n * axis_n.transpose();
 }
 

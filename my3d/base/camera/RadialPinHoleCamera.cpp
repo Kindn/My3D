@@ -35,6 +35,13 @@ Eigen::Vector2d RadialPinHoleCamera::pix2Norm(const Eigen::Vector2d &pix) const 
     return undistort(pc_norm); 
 }
 
+Eigen::Vector3d RadialPinHoleCamera::pix2Sphere(const Eigen::Vector2d &pix) const {
+    Eigen::Vector3d normalized_coord{};
+    normalized_coord.head<2>() = pix2Norm(pix);
+    normalized_coord.z() = 1.0;
+    return normalized_coord.normalized();
+}
+
 double RadialPinHoleCamera::thresholdPix2Norm(const double &threshold) const {
     const double mean_focal_length = 0.5 * (fx_ + fy_); 
     return threshold / mean_focal_length; 

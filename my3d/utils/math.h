@@ -20,7 +20,7 @@ namespace util {
 /**
  * @brief Get the corresponding skew-symmetric of a.
 */
-Eigen::Matrix3d skewSymmetric(const Eigen::Vector3d &a);
+Eigen::Matrix3d getSkewSymmetric(const Eigen::Vector3d &a);
 
 /**
  * @brief Converts a value in radians to a value in degrees 

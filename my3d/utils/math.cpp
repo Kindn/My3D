@@ -3,7 +3,7 @@
 namespace my3d {
 namespace util {
 
-Eigen::Matrix3d skewSymmetric(const Eigen::Vector3d &a) {
+Eigen::Matrix3d getSkewSymmetric(const Eigen::Vector3d &a) {
     Eigen::Matrix3d a_hat;
     a_hat << 0, -a(2), a(1), 
              a(2), 0, -a(0), 
